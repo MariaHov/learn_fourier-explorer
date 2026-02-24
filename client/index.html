@@ -2,44 +2,98 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title><!-- APP_TITLE --></title>
+  <title>CodeSignal Fourier Explorer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Fonts (Work Sans) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <!-- Design System Foundations -->
   <link rel="stylesheet" href="./design-system/colors/colors.css">
   <link rel="stylesheet" href="./design-system/spacing/spacing.css">
   <link rel="stylesheet" href="./design-system/typography/typography.css">
-
-  <!-- Design System Components -->
   <link rel="stylesheet" href="./design-system/components/button/button.css">
   <link rel="stylesheet" href="./design-system/components/boxes/boxes.css">
   <link rel="stylesheet" href="./design-system/components/input/input.css">
-  <link rel="stylesheet" href="./design-system/components/dropdown/dropdown.css">
-  <link rel="stylesheet" href="./design-system/components/tags/tags.css">
-  <link rel="stylesheet" href="./design-system/components/modal/modal.css">
 
-  <!-- Template-specific components (layout, utilities, temporary components) -->
   <link rel="stylesheet" href="./bespoke-template.css" />
-  <!-- APP_SPECIFIC_CSS -->
+  <link rel="stylesheet" href="./fourier-explorer.css" />
 </head>
 <body class="bespoke">
-  <!-- Navigation Header -->
   <header class="header">
-    <h1 class="heading-small">APP NAME</h1>
-    <!-- APP_SPECIFIC_HEADER_CONTENT -->
+    <h1 class="heading-small">CodeSignal Fourier Explorer</h1>
     <div class="spacer"></div>
+    <div id="status" class="status">Ready</div>
     <button id="btn-help" class="button button-text">Help</button>
   </header>
 
-  <!-- Main Application Content -->
-  <!-- APP_SPECIFIC_MAIN_CONTENT -->
+  <main class="main-layout">
+    <aside class="sidebar">
+      <section class="box card controls-card">
+        <h2 class="heading-small">Signal Setup</h2>
 
-  <!-- Core Scripts -->
+        <label>Preset waveform
+          <select id="preset" class="input">
+            <option value="sine">Sine</option>
+            <option value="square">Square</option>
+            <option value="triangle">Triangle</option>
+            <option value="sawtooth">Sawtooth</option>
+            <option value="pulse">Pulse</option>
+          </select>
+        </label>
+
+        <label>Samples: <span id="samples-value">256</span>
+          <input id="samples" class="input" type="range" min="64" max="512" step="64" value="256" />
+        </label>
+
+        <label>Reconstruction harmonics: <span id="harmonics-value">12</span>
+          <input id="harmonics" class="input" type="range" min="1" max="64" step="1" value="12" />
+        </label>
+
+        <div class="row controls-actions">
+          <button id="btn-analyze" class="button button-primary">Analyze</button>
+          <button id="btn-play" class="button button-secondary">Play</button>
+        </div>
+      </section>
+
+      <section class="box card legend-card">
+        <h3 class="heading-small">Legend</h3>
+        <p><span class="legend-dot signal"></span> Original signal (time domain)</p>
+        <p><span class="legend-dot spectrum"></span> Fourier magnitude spectrum</p>
+        <p><span class="legend-dot recon"></span> Reconstructed from first N harmonics</p>
+      </section>
+    </aside>
+
+    <section class="content-area viz-grid">
+      <article class="panel box card">
+        <h2 class="heading-small">Time Domain</h2>
+        <canvas id="signal-canvas" width="900" height="260"></canvas>
+      </article>
+
+      <article class="panel box card">
+        <h2 class="heading-small">Frequency Domain (DFT Magnitude)</h2>
+        <canvas id="spectrum-canvas" width="900" height="260"></canvas>
+      </article>
+
+      <article class="panel box card">
+        <h2 class="heading-small">Reconstruction</h2>
+        <canvas id="recon-canvas" width="900" height="260"></canvas>
+      </article>
+    </section>
+  </main>
+
+  <dialog id="help-dialog" class="help-dialog">
+    <article>
+      <h2>How to use</h2>
+      <ol>
+        <li>Pick a waveform preset and click <strong>Analyze</strong>.</li>
+        <li>Inspect the spectrum peaks to see which frequencies dominate.</li>
+        <li>Change reconstruction harmonics to see approximation quality.</li>
+        <li>Click <strong>Play</strong> for a quick audio preview if supported.</li>
+      </ol>
+      <button id="btn-close-help" class="button button-primary">Close</button>
+    </article>
+  </dialog>
+
   <script type="module" src="./app.js"></script>
-  <!-- APP_SPECIFIC_SCRIPTS -->
 </body>
 </html>

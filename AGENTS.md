@@ -6,10 +6,17 @@ the Bespoke Simulation framework. For complete template documentation, see
 
 ## Overview
 
-This template provides:
+This project currently provides:
 - CodeSignal Design System integration
 - Consistent layout components (header, sidebar, main content area)
-- Help modal system
+- Interactive Fourier denoising simulation with:
+  - Source signal presets (including a voice-like synthetic signal and `clean-speech.wav` file source)
+  - White noise and hum noise injection controls
+  - Low-pass and notch filtering controls
+  - Noisy-vs-filtered spectrum visualization
+  - List of strongest noisy-spectrum frequency components in Hz
+  - Noisy-vs-filtered audio playback
+- Help dialog system
 - Local development server with WebSocket support
 - Standardized file structure and naming conventions
 

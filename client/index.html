@@ -33,14 +33,17 @@
     <aside class="sidebar">
       <section class="box card ui-card controls-card">
         <h2 class="heading-small">Fourier Decomposition Explorer</h2>
-        <p class="controls-intro">Generate synthetic signals, analyze DFT components, and reconstruct with frequency-domain filters.</p>
+        <p class="controls-intro">Tune the signal and watch Fourier components update live.</p>
 
         <div class="control-group">
-          <h3 class="control-group-title">1) Source</h3>
-          <p class="control-group-help">Pick a signal formula and tune its frequencies.</p>
+          <h3 class="control-group-title">Basic controls</h3>
+          <p class="control-group-help">Core settings for quick exploration.</p>
 
           <label class="control-field">Source signal
-            <select id="source" class="input">
+            <div class="control-header">
+              <span class="control-caption">Waveform type</span>
+            </div>
+            <select id="source" class="input compact-input">
               <option value="sine">Sine</option>
               <option value="two-sines">Two sines</option>
               <option value="square-series">Square (Fourier series)</option>
@@ -49,65 +52,31 @@
 
           <label class="control-field">Frequency f1 (Hz)
             <div class="control-header">
-              <span class="control-caption">Primary sine frequency</span>
+              <span class="control-caption">Primary frequency</span>
               <span id="freq1-value" class="tag editable-value">120</span>
             </div>
             <input id="freq1" class="input" type="range" min="10" max="1000" step="1" value="120" />
           </label>
 
-          <label class="control-field">Frequency f2 (Hz)
+          <label id="control-f2-field" class="control-field">Frequency f2 (Hz)
             <div class="control-header">
-              <span class="control-caption">Only used in two-sines</span>
+              <span class="control-caption">Shown for two-sines</span>
               <span id="freq2-value" class="tag editable-value">260</span>
             </div>
             <input id="freq2" class="input" type="range" min="10" max="2000" step="1" value="260" />
           </label>
-        </div>
 
-        <div class="control-group">
-          <h3 class="control-group-title">2) Analysis resolution</h3>
-          <p class="control-group-help">Controls DFT bin spacing: Hz per bin is <code>fs / N</code>.</p>
-
-          <label class="control-field">Samples (N)
+          <label id="control-harmonics-field" class="control-field">Odd harmonics count
             <div class="control-header">
-              <span class="control-caption">Power-of-two sample count</span>
-              <span id="samples-value" class="tag editable-value">1024</span>
-            </div>
-            <input id="samples" class="input" type="range" min="256" max="2048" step="256" value="1024" />
-          </label>
-        </div>
-
-        <div class="control-group">
-          <h3 class="control-group-title">3) Fourier series + window</h3>
-          <p class="control-group-help">Harmonics shape the square wave; windowing changes leakage.</p>
-
-          <label class="control-field">Odd harmonics count
-            <div class="control-header">
-              <span class="control-caption">Only used in square-series</span>
+              <span class="control-caption">Shown for square-series</span>
               <span id="harmonics-value" class="tag editable-value">9</span>
             </div>
             <input id="harmonics" class="input" type="range" min="1" max="31" step="1" value="9" />
           </label>
 
-          <label class="control-field">Window type
-            <div class="control-header">
-              <span class="control-caption">Try Hann for reduced leakage</span>
-              <span class="tag">DFT input</span>
-            </div>
-            <select id="window-type" class="input">
-              <option value="rectangular">Rectangular</option>
-              <option value="hann">Hann</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="control-group">
-          <h3 class="control-group-title">4) Filtering (in frequency domain)</h3>
-          <p class="control-group-help">Filters modify complex bins (phase preserved) before reconstruction.</p>
-
           <label class="control-field">Low-pass cutoff bin
             <div class="control-header">
-              <span class="control-caption">Keep bins from 0 to cutoff</span>
+              <span class="control-caption">Main frequency filter</span>
               <div class="value-meta">
                 <span id="low-pass-value" class="tag editable-value">128</span>
                 <span id="low-pass-hz" class="helper-muted">≈ 5512 Hz</span>
@@ -115,33 +84,62 @@
             </div>
             <input id="low-pass" class="input" type="range" min="1" max="1023" step="1" value="128" />
           </label>
+        </div>
 
-          <label class="row inline-check">
-            <input id="notch-enabled" type="checkbox" checked />
-            <span>Enable notch filter</span>
-          </label>
+        <div id="advanced-accordion" class="control-group advanced-accordion">
+          <button id="advanced-toggle" class="advanced-toggle" type="button" aria-expanded="false" aria-controls="advanced-body">
+            <span class="control-group-title">Advanced settings</span>
+            <span class="accordion-icon" aria-hidden="true">▾</span>
+          </button>
+          <div id="advanced-body" class="advanced-body">
+            <p class="control-group-help compact-help">Resolution, windowing, and notch controls.</p>
 
-          <label class="control-field">Notch center bin
-            <div class="control-header">
-              <span class="control-caption">Center of removed frequency band</span>
-              <div class="value-meta">
-                <span id="notch-bin-value" class="tag editable-value">60</span>
-                <span id="notch-bin-hz" class="helper-muted">≈ 2584 Hz</span>
+            <label class="control-field">Samples (N)
+              <div class="control-header">
+                <span class="control-caption">DFT resolution (fs / N)</span>
+                <span id="samples-value" class="tag editable-value">1024</span>
               </div>
-            </div>
-            <input id="notch-bin" class="input" type="range" min="1" max="1023" step="1" value="60" />
-          </label>
+              <input id="samples" class="input" type="range" min="256" max="2048" step="256" value="1024" />
+            </label>
 
-          <label class="control-field">Notch width (bins)
-            <div class="control-header">
-              <span class="control-caption">Bins removed around center</span>
-              <div class="value-meta">
-                <span id="notch-width-value" class="tag editable-value">3</span>
-                <span id="notch-width-hz" class="helper-muted">~ 258 Hz wide</span>
+            <label class="control-field">Window type
+              <div class="control-header">
+                <span class="control-caption">Shape before DFT</span>
+                <span class="tag">DFT input</span>
               </div>
+              <select id="window-type" class="input compact-input">
+                <option value="rectangular">Rectangular</option>
+                <option value="hann">Hann</option>
+              </select>
+            </label>
+
+            <label class="row inline-check">
+              <input id="notch-enabled" type="checkbox" checked />
+              <span>Enable notch filter</span>
+            </label>
+
+            <div class="control-row-two">
+              <label class="control-field compact-field">Notch center
+                <div class="control-header">
+                  <div class="value-meta">
+                    <span id="notch-bin-value" class="tag editable-value">60</span>
+                    <span id="notch-bin-hz" class="helper-muted">≈ 2584 Hz</span>
+                  </div>
+                </div>
+                <input id="notch-bin" class="input" type="range" min="1" max="1023" step="1" value="60" />
+              </label>
+
+              <label class="control-field compact-field">Notch width
+                <div class="control-header">
+                  <div class="value-meta">
+                    <span id="notch-width-value" class="tag editable-value">3</span>
+                    <span id="notch-width-hz" class="helper-muted">~ 258 Hz wide</span>
+                  </div>
+                </div>
+                <input id="notch-width" class="input" type="range" min="0" max="24" step="1" value="3" />
+              </label>
             </div>
-            <input id="notch-width" class="input" type="range" min="0" max="24" step="1" value="3" />
-          </label>
+          </div>
         </div>
 
         <div class="row controls-actions">

@@ -1,9 +1,10 @@
 .bespoke {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--body-family, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif);
   background: #f6f7fb;
-  color: #232b3a;
+  color: var(--Colors-Text-Body-Default, #232b3a);
   min-height: 100vh;
   overflow-x: hidden;
+  line-height: 1.45;
 }
 
 .bespoke .header,
@@ -20,14 +21,15 @@
 }
 
 .bespoke .header h1 {
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1.2;
-  font-weight: 700;
+  font-weight: 600;
   margin: 0;
+  letter-spacing: -0.01em;
 }
 
 .bespoke .status {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   color: #3e4a62;
   padding: 4px 10px;
@@ -63,35 +65,37 @@
 }
 
 .bespoke .controls-card h2 {
-  font-size: 16px;
+  font-size: 15px;
   margin: 0 0 6px 0;
+  line-height: 1.3;
 }
 
 .bespoke .controls-intro {
-  margin: 0 0 10px 0;
-  font-size: 13px;
-  line-height: 1.35;
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  line-height: 1.3;
   color: #5f6e8a;
 }
 
 .bespoke .control-group-title {
-  margin: 0 0 6px 0;
-  font-size: 14px;
-  font-weight: 700;
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  font-weight: 600;
   color: #2c3750;
+  line-height: 1.3;
 }
 
 .bespoke .control-group {
-  padding: 10px;
-  margin: 0 0 10px 0;
+  padding: 8px;
+  margin: 0 0 8px 0;
   border: 1px solid #edf1fa;
   background: #fbfcff;
   border-radius: 12px;
 }
 
 .bespoke .control-group-help {
-  margin: 0 0 8px 0;
-  font-size: 12px;
+  margin: 0 0 6px 0;
+  font-size: 11px;
   line-height: 1.3;
   color: #6b7892;
 }
@@ -106,7 +110,9 @@
 }
 
 .bespoke .control-field {
-  margin: 0 0 9px 0;
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .bespoke .tag-muted {
@@ -120,12 +126,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 4px 0 6px;
+  margin: 3px 0 4px;
+  gap: 8px;
 }
 
 .bespoke .control-caption {
-  font-size: 12px;
+  font-size: 11px;
   color: #7c8aa3;
+  font-weight: 400;
 }
 
 .bespoke .tag {
@@ -182,12 +190,18 @@
   width: 100%;
 }
 
+.bespoke .compact-input {
+  min-height: 32px;
+}
+
 .bespoke .inline-check {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 6px 0 9px;
+  margin: 4px 0 6px;
   color: #41506f;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .bespoke .inline-check input {
@@ -195,15 +209,83 @@
 }
 
 .bespoke .controls-actions {
-  margin-top: 10px;
+  margin-top: 8px;
   display: grid;
   grid-template-columns: 1fr;
   gap: 8px;
 }
 
 .bespoke .controls-actions .button {
-  min-height: 40px;
+  min-height: 36px;
   justify-content: center;
+}
+
+.bespoke .is-hidden-control {
+  display: none;
+}
+
+.bespoke .advanced-accordion {
+  padding: 0;
+  overflow: hidden;
+}
+
+.bespoke .advanced-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  text-align: left;
+}
+
+.bespoke .advanced-toggle .control-group-title {
+  margin: 0;
+}
+
+.bespoke .accordion-icon {
+  color: #60708e;
+  font-size: 12px;
+  transition: transform 160ms ease;
+}
+
+.bespoke .advanced-accordion.is-open .accordion-icon {
+  transform: rotate(180deg);
+}
+
+.bespoke .advanced-body {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 8px;
+  transition: max-height 220ms ease;
+}
+
+.bespoke .advanced-accordion.is-open .advanced-body {
+  padding-bottom: 8px;
+}
+
+.bespoke .compact-help {
+  margin-top: 2px;
+}
+
+.bespoke .control-row-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bespoke .compact-field {
+  margin-bottom: 0;
+}
+
+.bespoke .compact-field .value-meta {
+  gap: 4px;
+}
+
+.bespoke .compact-field .helper-muted {
+  font-size: 10px;
 }
 
 .bespoke .content-area {
@@ -226,8 +308,9 @@
 .bespoke .panel h2,
 .bespoke .components-card h3 {
   margin: 0 0 6px 0;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .bespoke .plot-header {
@@ -286,8 +369,8 @@
 }
 
 .bespoke .formula-title {
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 700;
   letter-spacing: 0.02em;
   color: #2c3750;
   text-transform: uppercase;
@@ -295,14 +378,14 @@
 }
 
 .bespoke .formula-body {
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.4;
   color: #2f3b56;
 }
 
 .bespoke .formula-line {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 12px;
+  font-size: 11px;
   background: #f2f5fc;
   border: 1px solid #dde5f4;
   border-radius: 10px;
@@ -312,7 +395,7 @@
 }
 
 .bespoke .formula-hint {
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7892;
 }
 
@@ -338,15 +421,15 @@
 
 .bespoke .components-note {
   margin: 0 0 8px 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #5f6e8a;
 }
 
 .bespoke .components-list {
   margin: 0;
   padding-left: 18px;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.45;
   color: #2f3b56;
 }
 
@@ -423,6 +506,10 @@
   }
 
   .bespoke .viz-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bespoke .control-row-two {
     grid-template-columns: 1fr;
   }
 

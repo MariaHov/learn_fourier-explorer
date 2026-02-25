@@ -25,6 +25,11 @@ const state = {
 const els = {
   status: document.getElementById('status'),
   source: document.getElementById('source'),
+  controlF2Field: document.getElementById('control-f2-field'),
+  controlHarmonicsField: document.getElementById('control-harmonics-field'),
+  advancedAccordion: document.getElementById('advanced-accordion'),
+  advancedToggle: document.getElementById('advanced-toggle'),
+  advancedBody: document.getElementById('advanced-body'),
   samples: document.getElementById('samples'),
   samplesValue: document.getElementById('samples-value'),
   freq1: document.getElementById('freq1'),
@@ -72,6 +77,36 @@ const plotInteractions = {
 
 function setStatus(text) {
   els.status.textContent = text;
+}
+
+function updateSourceControlVisibility() {
+  if (els.controlF2Field) {
+    els.controlF2Field.classList.toggle('is-hidden-control', state.source !== 'two-sines');
+  }
+  if (els.controlHarmonicsField) {
+    els.controlHarmonicsField.classList.toggle('is-hidden-control', state.source !== 'square-series');
+  }
+}
+
+function setAdvancedOpen(isOpen) {
+  if (!els.advancedAccordion || !els.advancedToggle || !els.advancedBody) return;
+  els.advancedAccordion.classList.toggle('is-open', isOpen);
+  els.advancedToggle.setAttribute('aria-expanded', String(isOpen));
+  els.advancedBody.style.maxHeight = isOpen ? `${els.advancedBody.scrollHeight}px` : '0px';
+}
+
+function bindSidebarUi() {
+  if (els.advancedToggle) {
+    els.advancedToggle.addEventListener('click', () => {
+      const isOpen = !els.advancedAccordion.classList.contains('is-open');
+      setAdvancedOpen(isOpen);
+    });
+  }
+  window.addEventListener('resize', () => {
+    if (els.advancedAccordion && els.advancedAccordion.classList.contains('is-open')) {
+      setAdvancedOpen(true);
+    }
+  });
 }
 
 function clamp(value, minValue, maxValue) {
@@ -964,6 +999,7 @@ function resetFilters() {
 function bindEvents() {
   els.source.addEventListener('change', (event) => {
     state.source = event.target.value;
+    updateSourceControlVisibility();
     analyze();
   });
 
@@ -1042,6 +1078,8 @@ function bindEvents() {
 
 function initializeDefaults() {
   els.source.value = state.source;
+  updateSourceControlVisibility();
+  setAdvancedOpen(false);
   els.freq1.value = String(state.freq1);
   setEditableValueText(els.freq1Value, state.freq1, els.freq1);
   els.freq2.value = String(state.freq2);
@@ -1066,6 +1104,7 @@ function initializeDefaults() {
 
 function init() {
   setupPlotInteractionBindings();
+  bindSidebarUi();
   initializeDefaults();
   bindEvents();
   analyze();

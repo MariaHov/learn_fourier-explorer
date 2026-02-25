@@ -220,6 +220,12 @@
   justify-content: center;
 }
 
+.bespoke .hum-helper-btn {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 2px;
+}
+
 .bespoke .is-hidden-control {
   display: none;
 }
@@ -409,6 +415,16 @@
 .bespoke .audio-controls .button {
   min-height: 34px;
   flex: 0 0 auto;
+}
+
+.bespoke .demo-processing {
+  font-size: 11px;
+  color: #6b7892;
+  background: #f2f5fc;
+  border: 1px solid #dde5f4;
+  border-radius: 999px;
+  padding: 4px 8px;
+  line-height: 1.2;
 }
 
 .bespoke .panel-time {

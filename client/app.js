@@ -2,6 +2,7 @@ const DEFAULT_SAMPLE_RATE = 44100;
 const DEFAULT_PLAY_SECONDS = 1.25;
 const DEFAULT_GAIN = 0.12;
 const DEFAULT_FADE_SECONDS = 0.015;
+const PHONE_DEMO_CLEAN_URL = '/audio/Cosmo_clean.wav';
 
 const state = {
   sampleRate: DEFAULT_SAMPLE_RATE,
@@ -15,6 +16,13 @@ const state = {
   notchEnabled: true,
   notchBin: 60,
   notchWidth: 3,
+  phoneDemoBuffer: null,
+  phoneDemoLoaded: false,
+  phoneDemoCleanMono: [],
+  phoneDemoMono: [],
+  phoneDemoFilteredCacheKey: '',
+  phoneDemoFilteredCache: [],
+  rawSignal: [],
   analysisSignal: [],
   reconstructedSignal: [],
   originalSpectrumHalf: [],
@@ -25,6 +33,7 @@ const state = {
 const els = {
   status: document.getElementById('status'),
   source: document.getElementById('source'),
+  controlF1Field: document.getElementById('control-f1-field'),
   controlF2Field: document.getElementById('control-f2-field'),
   controlHarmonicsField: document.getElementById('control-harmonics-field'),
   advancedAccordion: document.getElementById('advanced-accordion'),
@@ -49,10 +58,12 @@ const els = {
   notchWidth: document.getElementById('notch-width'),
   notchWidthValue: document.getElementById('notch-width-value'),
   notchWidthHz: document.getElementById('notch-width-hz'),
+  removeHum: document.getElementById('btn-remove-hum'),
   resetFilters: document.getElementById('btn-reset-filters'),
   playOriginal: document.getElementById('btn-play-original'),
   playReconstructed: document.getElementById('btn-play-reconstructed'),
   playDifference: document.getElementById('btn-play-difference'),
+  demoProcessing: document.getElementById('demo-processing'),
   signalCanvas: document.getElementById('signal-canvas'),
   originalSpectrumCanvas: document.getElementById('spectrum-noisy-canvas'),
   filteredSpectrumCanvas: document.getElementById('spectrum-filtered-canvas'),
@@ -79,13 +90,228 @@ function setStatus(text) {
   els.status.textContent = text;
 }
 
+function setDemoProcessing(active, text = '') {
+  if (els.demoProcessing) {
+    els.demoProcessing.hidden = !active;
+    els.demoProcessing.textContent = text;
+  }
+  if (els.playReconstructed) els.playReconstructed.disabled = active;
+  if (els.playDifference) els.playDifference.disabled = active;
+}
+
 function updateSourceControlVisibility() {
+  const isPhoneDemo = state.source === 'phone-call-demo';
+  if (els.controlF1Field) {
+    els.controlF1Field.classList.toggle('is-hidden-control', isPhoneDemo);
+  }
   if (els.controlF2Field) {
     els.controlF2Field.classList.toggle('is-hidden-control', state.source !== 'two-sines');
   }
   if (els.controlHarmonicsField) {
     els.controlHarmonicsField.classList.toggle('is-hidden-control', state.source !== 'square-series');
   }
+  if (els.removeHum) {
+    els.removeHum.classList.toggle('is-hidden-control', !isPhoneDemo);
+  }
+}
+
+function extractMonoFull(audioBuffer) {
+  const channels = audioBuffer.numberOfChannels;
+  const frames = audioBuffer.length;
+  const mono = new Array(frames).fill(0);
+  if (channels <= 0) return mono;
+  for (let i = 0; i < frames; i += 1) {
+    let sum = 0;
+    for (let c = 0; c < channels; c += 1) {
+      sum += audioBuffer.getChannelData(c)[i];
+    }
+    mono[i] = sum / channels;
+  }
+  return mono;
+}
+
+function makeSeededRandom(seed = 1337) {
+  let s = seed >>> 0;
+  return () => {
+    s = (1664525 * s + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+function buildDemoNoisyFromClean(clean, sampleRate) {
+  const rand = makeSeededRandom(20260225);
+  const out = new Array(clean.length);
+
+  let lp = 0;
+  let bp1 = 0;
+  let bp2 = 0;
+
+  // Float-domain amplitudes for decoded WebAudio samples in [-1, 1].
+  const rumbleAmp = 0.045;
+  const humAmp = 0.065;
+  const hissAmp = 0.028;
+  const babbleAmp = 0.050;
+
+  for (let i = 0; i < clean.length; i += 1) {
+    const t = i / sampleRate;
+
+    // Low-frequency road/HVAC bed.
+    lp = 0.998 * lp + 0.002 * ((rand() * 2 - 1) * rumbleAmp);
+
+    // Mid-band textured ambience.
+    const n0 = rand() * 2 - 1;
+    bp1 = 0.94 * bp1 + 0.06 * n0;
+    bp2 = 0.85 * bp2 + 0.15 * bp1;
+    const am = 0.72 + 0.28 * (0.5 + 0.5 * Math.sin(2 * Math.PI * 0.36 * t));
+    const babble = (bp1 - bp2) * babbleAmp * am;
+
+    // Electrical hum (60 Hz + harmonics).
+    const hum = humAmp * (
+      Math.sin(2 * Math.PI * 60 * t) +
+      0.2 * Math.sin(2 * Math.PI * 120 * t) +
+      0.1 * Math.sin(2 * Math.PI * 180 * t)
+    );
+
+    const hiss = (rand() * 2 - 1) * hissAmp;
+    out[i] = (clean[i] ?? 0) + lp + babble + hum + hiss;
+  }
+
+  // Soft limit only when needed so voice loudness is preserved.
+  let peak = 1e-9;
+  for (let i = 0; i < out.length; i += 1) {
+    peak = Math.max(peak, Math.abs(out[i]));
+  }
+  const scale = peak > 0.98 ? 0.98 / peak : 1;
+  for (let i = 0; i < out.length; i += 1) out[i] *= scale;
+  return out;
+}
+
+async function ensurePhoneDemoLoaded() {
+  if (state.phoneDemoLoaded && state.phoneDemoBuffer) return true;
+  try {
+    setStatus('Loading demo audio...');
+    const response = await fetch(PHONE_DEMO_CLEAN_URL);
+    if (!response.ok) return false;
+    const bytes = await response.arrayBuffer();
+    const context = getAudioContext();
+    if (!context) return false;
+    const decoded = await context.decodeAudioData(bytes.slice(0));
+    state.phoneDemoBuffer = decoded;
+    state.phoneDemoCleanMono = extractMonoFull(decoded);
+    state.phoneDemoMono = buildDemoNoisyFromClean(state.phoneDemoCleanMono, decoded.sampleRate || DEFAULT_SAMPLE_RATE);
+    state.sampleRate = decoded.sampleRate || DEFAULT_SAMPLE_RATE;
+    state.phoneDemoLoaded = true;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function getPhoneDemoPlaybackRaw() {
+  if (!state.phoneDemoMono.length) return [];
+  const maxSamples = Math.min(state.phoneDemoMono.length, Math.floor(state.sampleRate * 3));
+  return state.phoneDemoMono.slice(0, Math.max(1, maxSamples));
+}
+
+function hannWindow(count) {
+  const w = new Array(count).fill(1);
+  if (count <= 1) return w;
+  for (let i = 0; i < count; i += 1) {
+    w[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (count - 1)));
+  }
+  return w;
+}
+
+function applyPhoneDemoEnhancement(fullSpectrum, count) {
+  const out = fullSpectrum.map((bin) => ({ re: bin.re, im: bin.im }));
+  const perBin = state.sampleRate / count;
+  const lowRumbleBin = Math.max(1, Math.round(45 / perBin));
+  const baseHumBin = Math.max(1, Math.round(60 / perBin));
+  const harmonicWidth = Math.max(1, state.notchWidth);
+
+  for (let k = 0; k < count; k += 1) {
+    const mirrored = Math.min(k, count - k);
+
+    // Light rumble attenuation (not full removal, keeps voice body).
+    if (mirrored <= lowRumbleBin) {
+      out[k].re *= 0.65;
+      out[k].im *= 0.65;
+    }
+
+    if (!state.notchEnabled) continue;
+
+    // Additional hum harmonics cleanup (120/180 Hz).
+    for (let h = 2; h <= 3; h += 1) {
+      const harmonicBin = baseHumBin * h;
+      if (Math.abs(mirrored - harmonicBin) <= harmonicWidth) {
+        out[k].re *= 0.24;
+        out[k].im *= 0.24;
+      }
+    }
+  }
+
+  return out;
+}
+
+async function buildPhoneDemoFilteredPlayback(raw, onProgress = null) {
+  const N = state.sampleCount;
+  const hop = Math.max(1, Math.floor(N / 4));
+  const out = new Array(raw.length).fill(0);
+  const norm = new Array(raw.length).fill(0);
+  const window = hannWindow(N);
+  const totalBlocks = Math.max(1, Math.ceil(raw.length / hop));
+  let blockIndex = 0;
+
+  for (let start = 0; start < raw.length; start += hop) {
+    const blockLength = Math.min(N, raw.length - start);
+    const block = new Array(N).fill(0);
+    for (let i = 0; i < blockLength; i += 1) {
+      block[i] = raw[start + i];
+    }
+    const windowed = new Array(N).fill(0);
+    for (let i = 0; i < N; i += 1) {
+      windowed[i] = block[i] * window[i];
+    }
+    const fullSpectrum = dft(windowed);
+    const filteredSpectrum = applyPhoneDemoEnhancement(filterSpectrum(fullSpectrum), N);
+    const reconstructed = idft(filteredSpectrum);
+    for (let i = 0; i < blockLength; i += 1) {
+      const sample = reconstructed[i] * window[i];
+      out[start + i] += sample;
+      norm[start + i] += window[i] * window[i];
+    }
+    blockIndex += 1;
+    if (onProgress) onProgress(blockIndex, totalBlocks);
+    if (blockIndex % 4 === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }
+
+  for (let i = 0; i < out.length; i += 1) {
+    if (norm[i] > 1e-9) {
+      out[i] /= norm[i];
+    }
+  }
+  return out;
+}
+
+async function getPhoneDemoFilteredPlayback(raw, onProgress = null) {
+  const key = [
+    state.sampleCount,
+    state.windowType,
+    state.lowPassCutoff,
+    state.notchEnabled ? 1 : 0,
+    state.notchBin,
+    state.notchWidth,
+    raw.length
+  ].join(':');
+  if (state.phoneDemoFilteredCacheKey === key && state.phoneDemoFilteredCache.length === raw.length) {
+    return state.phoneDemoFilteredCache;
+  }
+  const filtered = await buildPhoneDemoFilteredPlayback(raw, onProgress);
+  state.phoneDemoFilteredCacheKey = key;
+  state.phoneDemoFilteredCache = filtered;
+  return filtered;
 }
 
 function setAdvancedOpen(isOpen) {
@@ -270,6 +496,14 @@ function renderFormulaPanel() {
     return;
   }
 
+  if (state.source === 'phone-call-demo') {
+    els.formulaBody.innerHTML = [
+      '<div class="formula-line">x[n] = real phone-call waveform segment (Cosmo demo)</div>',
+      '<div class="formula-hint">Use low-pass + notch to isolate voice and reduce line hum.</div>'
+    ].join('');
+    return;
+  }
+
   // square-series
   const terms = [
     `sin(2π · ${f1} · t)`,
@@ -331,6 +565,15 @@ function normalizeSignal(signal) {
   return out;
 }
 
+function peakAbs(signal) {
+  let peak = 1e-9;
+  for (let i = 0; i < signal.length; i += 1) {
+    const v = Math.abs(signal[i]);
+    if (v > peak) peak = v;
+  }
+  return peak;
+}
+
 function tileToDuration(signal, seconds) {
   const targetSamples = Math.max(1, Math.floor(state.sampleRate * seconds));
   const out = new Float32Array(targetSamples);
@@ -340,7 +583,7 @@ function tileToDuration(signal, seconds) {
   return out;
 }
 
-function playSignal(signal, label) {
+function playSignal(signal, label, options = {}) {
   if (!signal || !signal.length) return;
   const context = getAudioContext();
   if (!context) {
@@ -350,9 +593,22 @@ function playSignal(signal, label) {
 
   stopPlayback();
 
-  const sourceData = clampSignal(normalizeSignal(tileToDuration(signal, DEFAULT_PLAY_SECONDS)));
+  const playbackSampleRate = options.sampleRate || state.sampleRate;
+  const shouldTile = options.tile !== false;
+  const baseSignal = shouldTile ? tileToDuration(signal, DEFAULT_PLAY_SECONDS) : signal;
+  let sourceData;
+  if (Number.isFinite(options.referencePeak) && options.referencePeak > 1e-9) {
+    const scale = 1 / options.referencePeak;
+    const scaled = new Float32Array(baseSignal.length);
+    for (let i = 0; i < baseSignal.length; i += 1) {
+      scaled[i] = baseSignal[i] * scale;
+    }
+    sourceData = clampSignal(scaled);
+  } else {
+    sourceData = clampSignal(normalizeSignal(baseSignal));
+  }
 
-  const buffer = context.createBuffer(1, sourceData.length, state.sampleRate);
+  const buffer = context.createBuffer(1, sourceData.length, playbackSampleRate);
   buffer.copyToChannel(sourceData, 0);
 
   const sourceNode = context.createBufferSource();
@@ -396,6 +652,16 @@ function windowValue(windowType, index, count) {
 }
 
 function generateSignalRaw() {
+  if (state.source === 'phone-call-demo') {
+    const noisy = state.phoneDemoMono;
+    if (!noisy || !noisy.length) return new Array(state.sampleCount).fill(0);
+    const out = new Array(state.sampleCount).fill(0);
+    const limit = Math.min(state.sampleCount, noisy.length);
+    for (let i = 0; i < limit; i += 1) out[i] = noisy[i];
+    return out;
+  }
+
+  state.sampleRate = DEFAULT_SAMPLE_RATE;
   const values = [];
   for (let index = 0; index < state.sampleCount; index += 1) {
     const time = index / state.sampleRate;
@@ -912,9 +1178,20 @@ function renderPlots() {
   drawSpectrum(els.filteredSpectrumCanvas, state.filteredSpectrumHalf, '#d1691b', filteredSpectrumOptions);
 }
 
-function analyze() {
+async function analyze() {
   setStatus('Analyzing...');
+  if (state.source === 'phone-call-demo') {
+    const ready = await ensurePhoneDemoLoaded();
+    if (!ready || !state.phoneDemoBuffer) {
+      setStatus('Demo audio failed to load');
+      return;
+    }
+    state.sampleRate = state.phoneDemoBuffer.sampleRate || DEFAULT_SAMPLE_RATE;
+  } else {
+    state.sampleRate = DEFAULT_SAMPLE_RATE;
+  }
   const rawSignal = generateSignalRaw();
+  state.rawSignal = rawSignal;
   state.analysisSignal = applyWindow(rawSignal);
   const fullSpectrum = dft(state.analysisSignal);
   state.originalSpectrumHalf = magnitudeHalf(fullSpectrum);
@@ -996,10 +1273,43 @@ function resetFilters() {
   analyze();
 }
 
+function applyRemoveHumPreset() {
+  const targetHz = 60;
+  const perBin = hzPerBin();
+  const maxBin = halfSpectrumMaxBin(state.sampleCount);
+  const targetBin = clamp(Math.round(targetHz / perBin), 1, maxBin);
+  const speechCutoffHz = 5600;
+  const cutoffBin = clamp(Math.round(speechCutoffHz / perBin), 1, maxBin);
+  state.notchEnabled = true;
+  state.lowPassCutoff = cutoffBin;
+  state.notchBin = targetBin;
+  state.notchWidth = 2;
+  els.notchEnabled.checked = true;
+  updateFilterBounds();
+  analyze();
+}
+
+function applyPhoneDemoDefaults() {
+  const perBin = hzPerBin();
+  const maxBin = halfSpectrumMaxBin(state.sampleCount);
+  const targetBin = clamp(Math.round(60 / perBin), 1, maxBin);
+  const cutoffBin = clamp(Math.round(6200 / perBin), 1, maxBin);
+  state.notchEnabled = true;
+  state.lowPassCutoff = cutoffBin;
+  state.notchBin = targetBin;
+  state.notchWidth = 2;
+  els.notchEnabled.checked = true;
+  updateFilterBounds();
+}
+
 function bindEvents() {
   els.source.addEventListener('change', (event) => {
+    const previousSource = state.source;
     state.source = event.target.value;
     updateSourceControlVisibility();
+    if (state.source === 'phone-call-demo' && previousSource !== 'phone-call-demo') {
+      applyPhoneDemoDefaults();
+    }
     analyze();
   });
 
@@ -1059,17 +1369,84 @@ function bindEvents() {
     analyze();
   });
 
+  if (els.removeHum) {
+    els.removeHum.addEventListener('click', applyRemoveHumPreset);
+  }
+
   els.resetFilters.addEventListener('click', resetFilters);
-  els.playOriginal.addEventListener('click', () => {
-    const raw = generateSignalRaw();
-    playSignal(raw, 'Playing original');
+  els.playOriginal.addEventListener('click', async () => {
+    if (state.source === 'phone-call-demo') {
+      const ready = await ensurePhoneDemoLoaded();
+      if (!ready) {
+        setStatus('Demo audio failed to load');
+        return;
+      }
+      const raw = getPhoneDemoPlaybackRaw();
+      playSignal(raw, 'Playing original demo', {
+        tile: false,
+        sampleRate: state.sampleRate,
+        referencePeak: peakAbs(raw)
+      });
+      return;
+    }
+    playSignal(state.rawSignal, 'Playing original');
   });
-  els.playReconstructed.addEventListener('click', () => {
+  els.playReconstructed.addEventListener('click', async () => {
+    if (state.source === 'phone-call-demo') {
+      const ready = await ensurePhoneDemoLoaded();
+      if (!ready) {
+        setStatus('Demo audio failed to load');
+        return;
+      }
+      setStatus('Preparing reconstructed demo...');
+      setDemoProcessing(true, 'Processing… 0%');
+      const raw = getPhoneDemoPlaybackRaw();
+      let reconstructed = [];
+      try {
+        reconstructed = await getPhoneDemoFilteredPlayback(raw, (done, total) => {
+          const pct = Math.round((done / Math.max(1, total)) * 100);
+          setDemoProcessing(true, `Processing… ${pct}%`);
+        });
+      } finally {
+        setDemoProcessing(false);
+      }
+      playSignal(reconstructed, 'Playing reconstructed demo', {
+        tile: false,
+        sampleRate: state.sampleRate,
+        referencePeak: peakAbs(raw)
+      });
+      return;
+    }
     playSignal(state.reconstructedSignal, 'Playing reconstructed');
   });
-  els.playDifference.addEventListener('click', () => {
-    const raw = generateSignalRaw();
-    const diff = raw.map((v, i) => v - (state.reconstructedSignal[i] ?? 0));
+  els.playDifference.addEventListener('click', async () => {
+    if (state.source === 'phone-call-demo') {
+      const ready = await ensurePhoneDemoLoaded();
+      if (!ready) {
+        setStatus('Demo audio failed to load');
+        return;
+      }
+      setStatus('Preparing difference demo...');
+      setDemoProcessing(true, 'Processing… 0%');
+      const raw = getPhoneDemoPlaybackRaw();
+      let reconstructed = [];
+      try {
+        reconstructed = await getPhoneDemoFilteredPlayback(raw, (done, total) => {
+          const pct = Math.round((done / Math.max(1, total)) * 100);
+          setDemoProcessing(true, `Processing… ${pct}%`);
+        });
+      } finally {
+        setDemoProcessing(false);
+      }
+      const diff = raw.map((v, i) => v - (reconstructed[i] ?? 0));
+      playSignal(diff, 'Playing difference demo', {
+        tile: false,
+        sampleRate: state.sampleRate,
+        referencePeak: peakAbs(raw)
+      });
+      return;
+    }
+    const diff = state.rawSignal.map((v, i) => v - (state.reconstructedSignal[i] ?? 0));
     playSignal(diff, 'Playing difference');
   });
   els.help.addEventListener('click', () => els.helpDialog.showModal());

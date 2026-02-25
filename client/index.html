@@ -47,10 +47,11 @@
               <option value="sine">Sine</option>
               <option value="two-sines">Two sines</option>
               <option value="square-series">Square (Fourier series)</option>
+              <option value="phone-call-demo">Phone Call Demo (Cosmo)</option>
             </select>
           </label>
 
-          <label class="control-field">Frequency f1 (Hz)
+          <label id="control-f1-field" class="control-field">Frequency f1 (Hz)
             <div class="control-header">
               <span class="control-caption">Primary frequency</span>
               <span id="freq1-value" class="tag editable-value">120</span>
@@ -84,6 +85,10 @@
             </div>
             <input id="low-pass" class="input" type="range" min="1" max="1023" step="1" value="128" />
           </label>
+
+          <button id="btn-remove-hum" class="button button-secondary hum-helper-btn is-hidden-control" type="button">
+            Remove Hum (60 Hz)
+          </button>
         </div>
 
         <div id="advanced-accordion" class="control-group advanced-accordion">
@@ -162,6 +167,7 @@
           <button id="btn-play-original" class="button button-secondary">Play Original</button>
           <button id="btn-play-reconstructed" class="button button-secondary">Play Reconstructed</button>
           <button id="btn-play-difference" class="button button-secondary">Play Difference</button>
+          <span id="demo-processing" class="demo-processing" hidden></span>
         </div>
         <div class="plot-area" id="plot-area-time">
           <canvas id="signal-canvas" width="900" height="260"></canvas>

@@ -44,7 +44,6 @@ const els = {
   notchWidth: document.getElementById('notch-width'),
   notchWidthValue: document.getElementById('notch-width-value'),
   notchWidthHz: document.getElementById('notch-width-hz'),
-  analyze: document.getElementById('btn-analyze'),
   resetFilters: document.getElementById('btn-reset-filters'),
   playOriginal: document.getElementById('btn-play-original'),
   playReconstructed: document.getElementById('btn-play-reconstructed'),
@@ -1024,7 +1023,6 @@ function bindEvents() {
     analyze();
   });
 
-  els.analyze.addEventListener('click', analyze);
   els.resetFilters.addEventListener('click', resetFilters);
   els.playOriginal.addEventListener('click', () => {
     const raw = generateSignalRaw();

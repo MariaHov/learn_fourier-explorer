@@ -9,13 +9,13 @@ the Bespoke Simulation framework. For complete template documentation, see
 This project currently provides:
 - CodeSignal Design System integration
 - Consistent layout components (header, sidebar, main content area)
-- Interactive Fourier denoising simulation with:
-  - Source signal presets (including a voice-like synthetic signal and `clean-speech.wav` file source)
-  - White noise and hum noise injection controls
+- Interactive Fourier decomposition simulation with:
+  - Synthetic source generators: sine, two-sines, square (Fourier series partial sums)
+  - Windowed analysis toggle (rectangular or Hann)
   - Low-pass and notch filtering controls
-  - Noisy-vs-filtered spectrum visualization
-  - List of strongest noisy-spectrum frequency components in Hz
-  - Noisy-vs-filtered audio playback
+  - Original-vs-filtered spectrum visualization
+  - Original-vs-reconstructed time-domain overlay
+  - List of strongest spectral frequency components in Hz
 - Help dialog system
 - Local development server with WebSocket support
 - Standardized file structure and naming conventions

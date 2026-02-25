@@ -32,56 +32,59 @@
   <main class="main-layout">
     <aside class="sidebar">
       <section class="box card ui-card controls-card">
-        <h2 class="heading-small">Audio Fourier Lab</h2>
-        <p class="controls-intro">Tune source, add noise, then remove it in frequency domain.</p>
+        <h2 class="heading-small">Fourier Decomposition Explorer</h2>
+        <p class="controls-intro">Generate synthetic signals, analyze DFT components, and reconstruct with frequency-domain filters.</p>
 
         <h3 class="control-group-title">Source</h3>
         <label class="control-field">Source signal
           <select id="source" class="input">
-            <option value="clean-speech-file">Clean speech (file)</option>
             <option value="sine">Sine</option>
-            <option value="square">Square</option>
-            <option value="triangle">Triangle</option>
-            <option value="sawtooth">Sawtooth</option>
-            <option value="pulse">Pulse</option>
-            <option value="voice-like">Voice-like</option>
+            <option value="two-sines">Two sines</option>
+            <option value="square-series">Square (Fourier series)</option>
           </select>
+        </label>
+
+        <label class="control-field">Frequency f1 (Hz)
+          <div class="control-header">
+            <span class="control-caption">Primary sine frequency</span>
+            <span id="freq1-value" class="tag">120</span>
+          </div>
+          <input id="freq1" class="input" type="range" min="10" max="1000" step="1" value="120" />
+        </label>
+
+        <label class="control-field">Frequency f2 (Hz)
+          <div class="control-header">
+            <span class="control-caption">Used in two-sines mode</span>
+            <span id="freq2-value" class="tag">260</span>
+          </div>
+          <input id="freq2" class="input" type="range" min="10" max="2000" step="1" value="260" />
         </label>
 
         <h3 class="control-group-title">Analysis resolution</h3>
         <label class="control-field">Samples
           <div class="control-header">
-            <span class="control-caption">Analysis resolution</span>
-            <span id="samples-value" class="tag">256</span>
+            <span class="control-caption">Power-of-two sample count</span>
+            <span id="samples-value" class="tag">1024</span>
           </div>
-          <input id="samples" class="input" type="range" min="64" max="512" step="64" value="256" />
+          <input id="samples" class="input" type="range" min="256" max="2048" step="256" value="1024" />
         </label>
 
         <hr />
 
-        <h3 class="control-group-title">Noise</h3>
-        <label class="control-field">White noise
+        <h3 class="control-group-title">Fourier Series + Window</h3>
+        <label class="control-field">Odd harmonics count
           <div class="control-header">
-            <span class="control-caption">Broadband random noise</span>
-            <span id="white-noise-value" class="tag">0.20</span>
+            <span class="control-caption">Used in square-series mode</span>
+            <span id="harmonics-value" class="tag">9</span>
           </div>
-          <input id="white-noise" class="input" type="range" min="0" max="1" step="0.01" value="0.2" />
+          <input id="harmonics" class="input" type="range" min="1" max="31" step="1" value="9" />
         </label>
 
-        <label class="control-field">Hum noise
-          <div class="control-header">
-            <span class="control-caption">Single-frequency electrical hum</span>
-            <span id="hum-noise-value" class="tag">0.35</span>
-          </div>
-          <input id="hum-noise" class="input" type="range" min="0" max="1" step="0.01" value="0.35" />
-        </label>
-
-        <label class="control-field">Hum frequency bin
-          <div class="control-header">
-            <span class="control-caption">Target hum peak position</span>
-            <span id="hum-bin-value" class="tag">8</span>
-          </div>
-          <input id="hum-bin" class="input" type="range" min="1" max="63" step="1" value="8" />
+        <label class="control-field">Window type
+          <select id="window-type" class="input">
+            <option value="rectangular">Rectangular</option>
+            <option value="hann">Hann</option>
+          </select>
         </label>
 
         <hr />
@@ -89,52 +92,59 @@
         <h3 class="control-group-title">Filtering</h3>
         <label class="control-field">Low-pass cutoff bin
           <div class="control-header">
-            <span class="control-caption">Remove high-frequency hiss</span>
-            <span id="low-pass-value" class="tag">24</span>
+            <span class="control-caption">Keep bins from 0 to cutoff</span>
+            <span id="low-pass-value" class="tag">128</span>
           </div>
-          <input id="low-pass" class="input" type="range" min="1" max="63" step="1" value="24" />
+          <input id="low-pass" class="input" type="range" min="1" max="1023" step="1" value="128" />
         </label>
 
         <label class="row inline-check">
           <input id="notch-enabled" type="checkbox" checked />
-          <span>Enable notch around hum bin</span>
+          <span>Enable notch filter</span>
+        </label>
+
+        <label class="control-field">Notch center bin
+          <div class="control-header">
+            <span class="control-caption">Center of removed frequency band</span>
+            <span id="notch-bin-value" class="tag">60</span>
+          </div>
+          <input id="notch-bin" class="input" type="range" min="1" max="1023" step="1" value="60" />
         </label>
 
         <label class="control-field">Notch width (bins)
           <div class="control-header">
-            <span class="control-caption">Bins removed around hum frequency</span>
-            <span id="notch-width-value" class="tag">1</span>
+            <span class="control-caption">Bins removed around center</span>
+            <span id="notch-width-value" class="tag">3</span>
           </div>
-          <input id="notch-width" class="input" type="range" min="0" max="6" step="1" value="1" />
+          <input id="notch-width" class="input" type="range" min="0" max="24" step="1" value="3" />
         </label>
 
         <div class="row controls-actions">
           <button id="btn-analyze" class="button button-primary">Analyze</button>
-          <button id="btn-play-noisy" class="button button-secondary">Play Noisy</button>
-          <button id="btn-play-filtered" class="button button-secondary">Play Filtered</button>
+          <button id="btn-reset-filters" class="button button-secondary">Reset Filters</button>
         </div>
       </section>
     </aside>
 
     <section class="content-area viz-grid">
       <article class="panel box card ui-card panel-time">
-        <h2 class="heading-small">Time Domain (Noisy vs Filtered)</h2>
+        <h2 class="heading-small">Time Domain (Original vs Reconstructed)</h2>
         <canvas id="signal-canvas" width="900" height="260"></canvas>
       </article>
 
       <article class="panel box card ui-card panel-spectrum">
-        <h2 class="heading-small">Original Spectrum (Noisy)</h2>
+        <h2 class="heading-small">Original Spectrum Magnitude</h2>
         <canvas id="spectrum-noisy-canvas" width="900" height="260"></canvas>
       </article>
 
       <article class="panel box card ui-card panel-spectrum">
-        <h2 class="heading-small">Filtered Spectrum</h2>
+        <h2 class="heading-small">Filtered Spectrum Magnitude</h2>
         <canvas id="spectrum-filtered-canvas" width="900" height="260"></canvas>
       </article>
 
       <section class="box card ui-card components-card">
         <h3 class="heading-small">Strongest Components</h3>
-        <p class="components-note">Top frequency components from the noisy spectrum.</p>
+        <p class="components-note">Top frequency bins from the original spectrum (Hz and magnitude).</p>
         <ul id="components-list" class="components-list"></ul>
       </section>
     </section>
@@ -144,10 +154,10 @@
     <article>
       <h2>How to use</h2>
       <ol>
-        <li>Pick a source and tune white/hum noise.</li>
-        <li>Click <strong>Analyze</strong> to view noisy and filtered spectra.</li>
-        <li>Adjust low-pass and notch controls to remove noise.</li>
-        <li>Compare playback using <strong>Play Noisy</strong> and <strong>Play Filtered</strong>.</li>
+        <li>Pick a synthetic source and tune frequencies.</li>
+        <li>Change harmonics and window type to inspect spectral leakage.</li>
+        <li>Use low-pass and notch filters to modify complex frequency bins.</li>
+        <li>Compare the original and reconstructed waveforms and spectra.</li>
       </ol>
       <button id="btn-close-help" class="button button-primary">Close</button>
     </article>

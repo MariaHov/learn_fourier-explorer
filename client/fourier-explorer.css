@@ -73,14 +73,45 @@
 }
 
 .bespoke .control-group-title {
-  margin: 16px 0 8px 0;
+  margin: 0 0 6px 0;
   font-size: 14px;
   font-weight: 700;
   color: #2c3750;
 }
 
+.bespoke .control-group {
+  padding: 12px 12px 10px;
+  margin: 0 0 12px 0;
+  border: 1px solid #edf1fa;
+  background: #fbfcff;
+  border-radius: 12px;
+}
+
+.bespoke .control-group-help {
+  margin: 0 0 10px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #6b7892;
+}
+
+.bespoke .control-group-help code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #f2f5fc;
+  border: 1px solid #dde5f4;
+}
+
 .bespoke .control-field {
   margin: 0 0 12px 0;
+}
+
+.bespoke .tag-muted {
+  margin-left: 6px;
+  color: #6b7892;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .bespoke .control-header {
@@ -102,6 +133,46 @@
   background: #f2f5fc;
   border: 1px solid #dde5f4;
   color: #3e4a62;
+}
+
+.bespoke .value-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bespoke .helper-muted {
+  color: #7b879f;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.bespoke .editable-value {
+  cursor: text;
+  user-select: none;
+}
+
+.bespoke .editable-value:hover {
+  border-color: #c8d5ef;
+}
+
+.bespoke .editable-value.editing {
+  padding: 0;
+  border-color: #b9caea;
+  background: #ffffff;
+}
+
+.bespoke .editable-inline-input {
+  width: 64px;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 2px 6px;
+  border: 1px solid #b9caea;
+  border-radius: 999px;
+  outline: none;
+  background: #ffffff;
+  color: #2d3750;
 }
 
 .bespoke .controls-card .input,
@@ -155,6 +226,60 @@
   margin: 0 0 10px 0;
   font-size: 15px;
   font-weight: 700;
+}
+
+.bespoke .formula-panel {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 12px;
+  padding: 12px;
+  margin: 0 0 12px 0;
+  border: 1px solid #edf1fa;
+  background: #fbfcff;
+  border-radius: 12px;
+}
+
+.bespoke .formula-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #2c3750;
+  text-transform: uppercase;
+  align-self: start;
+}
+
+.bespoke .formula-body {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #2f3b56;
+}
+
+.bespoke .formula-line {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  background: #f2f5fc;
+  border: 1px solid #dde5f4;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin: 0 0 8px 0;
+  overflow-x: auto;
+}
+
+.bespoke .formula-hint {
+  font-size: 12px;
+  color: #6b7892;
+}
+
+.bespoke .audio-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px 0;
+}
+
+.bespoke .audio-controls .button {
+  min-height: 38px;
+  flex: 0 0 auto;
 }
 
 .bespoke .panel-time {
@@ -220,6 +345,10 @@
   }
 
   .bespoke .viz-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bespoke .formula-panel {
     grid-template-columns: 1fr;
   }
 

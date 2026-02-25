@@ -1,4 +1,7 @@
 const DEFAULT_SAMPLE_RATE = 44100;
+const DEFAULT_PLAY_SECONDS = 1.25;
+const DEFAULT_GAIN = 0.12;
+const DEFAULT_FADE_SECONDS = 0.015;
 
 const state = {
   sampleRate: DEFAULT_SAMPLE_RATE,
@@ -33,17 +36,24 @@ const els = {
   windowType: document.getElementById('window-type'),
   lowPass: document.getElementById('low-pass'),
   lowPassValue: document.getElementById('low-pass-value'),
+  lowPassHz: document.getElementById('low-pass-hz'),
   notchEnabled: document.getElementById('notch-enabled'),
   notchBin: document.getElementById('notch-bin'),
   notchBinValue: document.getElementById('notch-bin-value'),
+  notchBinHz: document.getElementById('notch-bin-hz'),
   notchWidth: document.getElementById('notch-width'),
   notchWidthValue: document.getElementById('notch-width-value'),
+  notchWidthHz: document.getElementById('notch-width-hz'),
   analyze: document.getElementById('btn-analyze'),
   resetFilters: document.getElementById('btn-reset-filters'),
+  playOriginal: document.getElementById('btn-play-original'),
+  playReconstructed: document.getElementById('btn-play-reconstructed'),
+  playDifference: document.getElementById('btn-play-difference'),
   signalCanvas: document.getElementById('signal-canvas'),
   originalSpectrumCanvas: document.getElementById('spectrum-noisy-canvas'),
   filteredSpectrumCanvas: document.getElementById('spectrum-filtered-canvas'),
   componentsList: document.getElementById('components-list'),
+  formulaBody: document.getElementById('formula-body'),
   help: document.getElementById('btn-help'),
   helpDialog: document.getElementById('help-dialog'),
   closeHelp: document.getElementById('btn-close-help')
@@ -61,6 +71,111 @@ function halfSpectrumMaxBin(sampleCount) {
   return Math.max(1, Math.floor(sampleCount / 2) - 1);
 }
 
+function stepPrecision(stepValue) {
+  const text = String(stepValue || '1');
+  const dot = text.indexOf('.');
+  return dot >= 0 ? (text.length - dot - 1) : 0;
+}
+
+function clampToSlider(value, slider) {
+  const min = Number(slider.min);
+  const max = Number(slider.max);
+  const step = Number(slider.step || 1);
+  const clamped = clamp(value, min, max);
+  if (!Number.isFinite(step) || step <= 0) return clamped;
+  const snapped = min + Math.round((clamped - min) / step) * step;
+  const precision = stepPrecision(step);
+  return Number(clamp(snapped, min, max).toFixed(precision));
+}
+
+function setEditableValueText(element, value, slider) {
+  const step = Number(slider.step || 1);
+  const precision = stepPrecision(step);
+  element.textContent = Number(value).toFixed(precision).replace(/\.0+$/, '');
+}
+
+function setupEditableNumberValue(displayElement, sliderElement) {
+  if (!displayElement || !sliderElement) return;
+  let activeInput = null;
+
+  const stopEditing = () => {
+    if (!activeInput) return;
+    activeInput.remove();
+    activeInput = null;
+    displayElement.classList.remove('editing');
+  };
+
+  const commit = () => {
+    if (!activeInput) return;
+    const raw = activeInput.value;
+    if (raw.trim() === '') {
+      stopEditing();
+      setEditableValueText(displayElement, sliderElement.value, sliderElement);
+      return;
+    }
+    const parsed = Number(raw);
+    if (Number.isNaN(parsed)) {
+      stopEditing();
+      setEditableValueText(displayElement, sliderElement.value, sliderElement);
+      return;
+    }
+    const nextValue = clampToSlider(parsed, sliderElement);
+    const changed = Number(sliderElement.value) !== nextValue;
+    sliderElement.value = String(nextValue);
+    stopEditing();
+    setEditableValueText(displayElement, nextValue, sliderElement);
+    if (changed) {
+      sliderElement.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  };
+
+  displayElement.addEventListener('dblclick', () => {
+    if (activeInput) return;
+    const current = sliderElement.value;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'editable-inline-input';
+    input.min = sliderElement.min;
+    input.max = sliderElement.max;
+    input.step = sliderElement.step || '1';
+    input.value = current;
+    input.setAttribute('inputmode', 'decimal');
+
+    displayElement.textContent = '';
+    displayElement.classList.add('editing');
+    displayElement.appendChild(input);
+    activeInput = input;
+    input.focus();
+    input.select();
+
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commit();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        stopEditing();
+        setEditableValueText(displayElement, sliderElement.value, sliderElement);
+      }
+    });
+    input.addEventListener('blur', commit);
+  });
+}
+
+function hzPerBin() {
+  return state.sampleRate / state.sampleCount;
+}
+
+function renderBinHzHelpers() {
+  const perBin = hzPerBin();
+  const lowPassHz = state.lowPassCutoff * perBin;
+  const notchCenterHz = state.notchBin * perBin;
+  const notchWidthHz = (state.notchWidth * 2) * perBin;
+  if (els.lowPassHz) els.lowPassHz.textContent = `≈ ${Math.round(lowPassHz)} Hz`;
+  if (els.notchBinHz) els.notchBinHz.textContent = `≈ ${Math.round(notchCenterHz)} Hz`;
+  if (els.notchWidthHz) els.notchWidthHz.textContent = `~ ${Math.round(notchWidthHz)} Hz wide`;
+}
+
 function updateFilterBounds() {
   const maxBin = halfSpectrumMaxBin(state.sampleCount);
   state.lowPassCutoff = clamp(state.lowPassCutoff, 1, maxBin);
@@ -74,9 +189,156 @@ function updateFilterBounds() {
   els.lowPass.value = String(state.lowPassCutoff);
   els.notchBin.value = String(state.notchBin);
   els.notchWidth.value = String(state.notchWidth);
-  els.lowPassValue.textContent = String(state.lowPassCutoff);
-  els.notchBinValue.textContent = String(state.notchBin);
-  els.notchWidthValue.textContent = String(state.notchWidth);
+  setEditableValueText(els.lowPassValue, state.lowPassCutoff, els.lowPass);
+  setEditableValueText(els.notchBinValue, state.notchBin, els.notchBin);
+  setEditableValueText(els.notchWidthValue, state.notchWidth, els.notchWidth);
+  renderBinHzHelpers();
+}
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function renderFormulaPanel() {
+  if (!els.formulaBody) return;
+  const f1 = state.freq1;
+  const f2 = state.freq2;
+  const h = state.harmonics;
+
+  if (state.source === 'sine') {
+    els.formulaBody.innerHTML = [
+      `<div class=\"formula-line\">x(t) = sin(2π · ${f1} · t)</div>`,
+      `<div class=\"formula-hint\">Spectrum: one dominant peak near ${f1} Hz.</div>`
+    ].join('');
+    return;
+  }
+
+  if (state.source === 'two-sines') {
+    els.formulaBody.innerHTML = [
+      `<div class=\"formula-line\">x(t) = sin(2π · ${f1} · t) + sin(2π · ${f2} · t)</div>`,
+      `<div class=\"formula-hint\">Spectrum: peaks near ${f1} Hz and ${f2} Hz.</div>`
+    ].join('');
+    return;
+  }
+
+  // square-series
+  const terms = [
+    `sin(2π · ${f1} · t)`,
+    `(1/3) sin(2π · ${3 * f1} · t)`,
+    `(1/5) sin(2π · ${5 * f1} · t)`
+  ];
+  const expanded = terms.join(' + ') + ' + …';
+  const series = `x(t) ≈ Σ (1/(2m-1)) · sin(2π · (2m-1) · ${f1} · t)`;
+  els.formulaBody.innerHTML = [
+    `<div class=\"formula-line\">${escapeHtml(series)}</div>`,
+    `<div class=\"formula-line\">First terms: ${escapeHtml(expanded)}</div>`,
+    `<div class=\"formula-hint\">Using ${h} odd harmonics (more harmonics → sharper corners).</div>`
+  ].join('');
+}
+
+let audioContext = null;
+let activeSourceNode = null;
+
+function stopPlayback() {
+  if (activeSourceNode) {
+    try {
+      activeSourceNode.stop();
+    } catch (_) {
+      // ignore stop errors
+    }
+    activeSourceNode.disconnect();
+    activeSourceNode = null;
+  }
+}
+
+function getAudioContext() {
+  if (audioContext) return audioContext;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  audioContext = new AudioContextClass();
+  return audioContext;
+}
+
+function clampSignal(signal) {
+  const out = new Float32Array(signal.length);
+  for (let i = 0; i < signal.length; i += 1) {
+    const v = signal[i];
+    out[i] = v > 1 ? 1 : (v < -1 ? -1 : v);
+  }
+  return out;
+}
+
+function normalizeSignal(signal) {
+  let peak = 1e-9;
+  for (let i = 0; i < signal.length; i += 1) {
+    const v = Math.abs(signal[i]);
+    if (v > peak) peak = v;
+  }
+  const scale = 1 / peak;
+  const out = new Float32Array(signal.length);
+  for (let i = 0; i < signal.length; i += 1) {
+    out[i] = signal[i] * scale;
+  }
+  return out;
+}
+
+function tileToDuration(signal, seconds) {
+  const targetSamples = Math.max(1, Math.floor(state.sampleRate * seconds));
+  const out = new Float32Array(targetSamples);
+  for (let i = 0; i < targetSamples; i += 1) {
+    out[i] = signal[i % signal.length];
+  }
+  return out;
+}
+
+function playSignal(signal, label) {
+  if (!signal || !signal.length) return;
+  const context = getAudioContext();
+  if (!context) {
+    setStatus('Audio not supported');
+    return;
+  }
+
+  stopPlayback();
+
+  const sourceData = clampSignal(normalizeSignal(tileToDuration(signal, DEFAULT_PLAY_SECONDS)));
+
+  const buffer = context.createBuffer(1, sourceData.length, state.sampleRate);
+  buffer.copyToChannel(sourceData, 0);
+
+  const sourceNode = context.createBufferSource();
+  sourceNode.buffer = buffer;
+
+  const gainNode = context.createGain();
+  gainNode.gain.value = 0;
+
+  sourceNode.connect(gainNode);
+  gainNode.connect(context.destination);
+
+  const now = context.currentTime;
+  const fade = DEFAULT_FADE_SECONDS;
+  const endTime = now + buffer.duration;
+  gainNode.gain.setValueAtTime(0, now);
+  gainNode.gain.linearRampToValueAtTime(DEFAULT_GAIN, now + fade);
+  gainNode.gain.setValueAtTime(DEFAULT_GAIN, Math.max(now + fade, endTime - fade));
+  gainNode.gain.linearRampToValueAtTime(0, endTime);
+
+  context.resume().catch(() => {});
+  sourceNode.start();
+
+  activeSourceNode = sourceNode;
+  setStatus(label);
+
+  sourceNode.onended = () => {
+    if (activeSourceNode === sourceNode) {
+      activeSourceNode.disconnect();
+      activeSourceNode = null;
+    }
+    setStatus('Ready');
+  };
 }
 
 function windowValue(windowType, index, count) {
@@ -87,7 +349,7 @@ function windowValue(windowType, index, count) {
   return 1;
 }
 
-function generateSignal() {
+function generateSignalRaw() {
   const values = [];
   for (let index = 0; index < state.sampleCount; index += 1) {
     const time = index / state.sampleRate;
@@ -106,11 +368,13 @@ function generateSignal() {
       }
       sample *= (4 / Math.PI);
     }
-
-    const win = windowValue(state.windowType, index, state.sampleCount);
-    values.push(sample * win);
+    values.push(sample);
   }
   return values;
+}
+
+function applyWindow(signal) {
+  return signal.map((sample, index) => sample * windowValue(state.windowType, index, state.sampleCount));
 }
 
 function dft(signal) {
@@ -249,7 +513,8 @@ function renderComponentsList(bins) {
 
 function analyze() {
   setStatus('Analyzing...');
-  state.analysisSignal = generateSignal();
+  const rawSignal = generateSignalRaw();
+  state.analysisSignal = applyWindow(rawSignal);
   const fullSpectrum = dft(state.analysisSignal);
   state.originalSpectrumHalf = magnitudeHalf(fullSpectrum);
   state.filteredSpectrumFull = filterSpectrum(fullSpectrum);
@@ -260,6 +525,8 @@ function analyze() {
   drawSpectrum(els.originalSpectrumCanvas, state.originalSpectrumHalf, '#10a77f');
   drawSpectrum(els.filteredSpectrumCanvas, state.filteredSpectrumHalf, '#d1691b');
   renderComponentsList(state.originalSpectrumHalf);
+  renderFormulaPanel();
+  renderBinHzHelpers();
   setStatus('Ready');
 }
 
@@ -281,26 +548,26 @@ function bindEvents() {
 
   els.samples.addEventListener('input', (event) => {
     state.sampleCount = Number(event.target.value);
-    els.samplesValue.textContent = String(state.sampleCount);
+    setEditableValueText(els.samplesValue, state.sampleCount, els.samples);
     updateFilterBounds();
     analyze();
   });
 
   els.freq1.addEventListener('input', (event) => {
     state.freq1 = Number(event.target.value);
-    els.freq1Value.textContent = String(state.freq1);
+    setEditableValueText(els.freq1Value, state.freq1, els.freq1);
     analyze();
   });
 
   els.freq2.addEventListener('input', (event) => {
     state.freq2 = Number(event.target.value);
-    els.freq2Value.textContent = String(state.freq2);
+    setEditableValueText(els.freq2Value, state.freq2, els.freq2);
     analyze();
   });
 
   els.harmonics.addEventListener('input', (event) => {
     state.harmonics = Number(event.target.value);
-    els.harmonicsValue.textContent = String(state.harmonics);
+    setEditableValueText(els.harmonicsValue, state.harmonics, els.harmonics);
     analyze();
   });
 
@@ -311,7 +578,8 @@ function bindEvents() {
 
   els.lowPass.addEventListener('input', (event) => {
     state.lowPassCutoff = Number(event.target.value);
-    els.lowPassValue.textContent = String(state.lowPassCutoff);
+    setEditableValueText(els.lowPassValue, state.lowPassCutoff, els.lowPass);
+    renderBinHzHelpers();
     analyze();
   });
 
@@ -322,35 +590,58 @@ function bindEvents() {
 
   els.notchBin.addEventListener('input', (event) => {
     state.notchBin = Number(event.target.value);
-    els.notchBinValue.textContent = String(state.notchBin);
+    setEditableValueText(els.notchBinValue, state.notchBin, els.notchBin);
+    renderBinHzHelpers();
     analyze();
   });
 
   els.notchWidth.addEventListener('input', (event) => {
     state.notchWidth = Number(event.target.value);
-    els.notchWidthValue.textContent = String(state.notchWidth);
+    setEditableValueText(els.notchWidthValue, state.notchWidth, els.notchWidth);
+    renderBinHzHelpers();
     analyze();
   });
 
   els.analyze.addEventListener('click', analyze);
   els.resetFilters.addEventListener('click', resetFilters);
+  els.playOriginal.addEventListener('click', () => {
+    const raw = generateSignalRaw();
+    playSignal(raw, 'Playing original');
+  });
+  els.playReconstructed.addEventListener('click', () => {
+    playSignal(state.reconstructedSignal, 'Playing reconstructed');
+  });
+  els.playDifference.addEventListener('click', () => {
+    const raw = generateSignalRaw();
+    const diff = raw.map((v, i) => v - (state.reconstructedSignal[i] ?? 0));
+    playSignal(diff, 'Playing difference');
+  });
   els.help.addEventListener('click', () => els.helpDialog.showModal());
   els.closeHelp.addEventListener('click', () => els.helpDialog.close());
 }
 
 function initializeDefaults() {
   els.source.value = state.source;
-  els.samples.value = String(state.sampleCount);
-  els.samplesValue.textContent = String(state.sampleCount);
   els.freq1.value = String(state.freq1);
-  els.freq1Value.textContent = String(state.freq1);
+  setEditableValueText(els.freq1Value, state.freq1, els.freq1);
   els.freq2.value = String(state.freq2);
-  els.freq2Value.textContent = String(state.freq2);
+  setEditableValueText(els.freq2Value, state.freq2, els.freq2);
   els.harmonics.value = String(state.harmonics);
-  els.harmonicsValue.textContent = String(state.harmonics);
+  setEditableValueText(els.harmonicsValue, state.harmonics, els.harmonics);
+  els.samples.value = String(state.sampleCount);
+  setEditableValueText(els.samplesValue, state.sampleCount, els.samples);
   els.windowType.value = state.windowType;
   els.notchEnabled.checked = state.notchEnabled;
   updateFilterBounds();
+  setupEditableNumberValue(els.freq1Value, els.freq1);
+  setupEditableNumberValue(els.freq2Value, els.freq2);
+  setupEditableNumberValue(els.samplesValue, els.samples);
+  setupEditableNumberValue(els.harmonicsValue, els.harmonics);
+  setupEditableNumberValue(els.lowPassValue, els.lowPass);
+  setupEditableNumberValue(els.notchBinValue, els.notchBin);
+  setupEditableNumberValue(els.notchWidthValue, els.notchWidth);
+  renderFormulaPanel();
+  renderBinHzHelpers();
 }
 
 function init() {

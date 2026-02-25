@@ -153,7 +153,10 @@
 
     <section class="content-area viz-grid">
       <article class="panel box card ui-card panel-time">
-        <h2 class="heading-small">Time Domain (Original vs Reconstructed)</h2>
+        <div class="plot-header">
+          <h2 class="heading-small">Time Domain (Original vs Reconstructed)</h2>
+          <button id="btn-reset-zoom-time" class="button button-text plot-reset-btn">Reset zoom</button>
+        </div>
         <div id="formula-panel" class="formula-panel">
           <div class="formula-title">Formula</div>
           <div id="formula-body" class="formula-body"></div>
@@ -163,17 +166,32 @@
           <button id="btn-play-reconstructed" class="button button-secondary">Play Reconstructed</button>
           <button id="btn-play-difference" class="button button-secondary">Play Difference</button>
         </div>
-        <canvas id="signal-canvas" width="900" height="260"></canvas>
+        <div class="plot-area" id="plot-area-time">
+          <canvas id="signal-canvas" width="900" height="260"></canvas>
+          <div id="tooltip-time" class="plot-tooltip" hidden></div>
+        </div>
       </article>
 
       <article class="panel box card ui-card panel-spectrum">
-        <h2 class="heading-small">Original Spectrum Magnitude</h2>
-        <canvas id="spectrum-noisy-canvas" width="900" height="260"></canvas>
+        <div class="plot-header">
+          <h2 class="heading-small">Original Spectrum Magnitude</h2>
+          <button id="btn-reset-zoom-original-spectrum" class="button button-text plot-reset-btn">Reset zoom</button>
+        </div>
+        <div class="plot-area" id="plot-area-original-spectrum">
+          <canvas id="spectrum-noisy-canvas" width="900" height="260"></canvas>
+          <div id="tooltip-original-spectrum" class="plot-tooltip" hidden></div>
+        </div>
       </article>
 
       <article class="panel box card ui-card panel-spectrum">
-        <h2 class="heading-small">Filtered Spectrum Magnitude</h2>
-        <canvas id="spectrum-filtered-canvas" width="900" height="260"></canvas>
+        <div class="plot-header">
+          <h2 class="heading-small">Filtered Spectrum Magnitude</h2>
+          <button id="btn-reset-zoom-filtered-spectrum" class="button button-text plot-reset-btn">Reset zoom</button>
+        </div>
+        <div class="plot-area" id="plot-area-filtered-spectrum">
+          <canvas id="spectrum-filtered-canvas" width="900" height="260"></canvas>
+          <div id="tooltip-filtered-spectrum" class="plot-tooltip" hidden></div>
+        </div>
       </article>
 
       <section class="box card ui-card components-card">

@@ -52,11 +52,23 @@ const els = {
   signalCanvas: document.getElementById('signal-canvas'),
   originalSpectrumCanvas: document.getElementById('spectrum-noisy-canvas'),
   filteredSpectrumCanvas: document.getElementById('spectrum-filtered-canvas'),
+  timeTooltip: document.getElementById('tooltip-time'),
+  originalSpectrumTooltip: document.getElementById('tooltip-original-spectrum'),
+  filteredSpectrumTooltip: document.getElementById('tooltip-filtered-spectrum'),
+  resetZoomTime: document.getElementById('btn-reset-zoom-time'),
+  resetZoomOriginalSpectrum: document.getElementById('btn-reset-zoom-original-spectrum'),
+  resetZoomFilteredSpectrum: document.getElementById('btn-reset-zoom-filtered-spectrum'),
   componentsList: document.getElementById('components-list'),
   formulaBody: document.getElementById('formula-body'),
   help: document.getElementById('btn-help'),
   helpDialog: document.getElementById('help-dialog'),
   closeHelp: document.getElementById('btn-close-help')
+};
+
+const plotInteractions = {
+  time: null,
+  originalSpectrum: null,
+  filteredSpectrum: null
 };
 
 function setStatus(text) {
@@ -451,20 +463,54 @@ function clearCanvas(ctx, width, height, axis = 'x') {
   ctx.stroke();
 }
 
-function drawSignalOverlay(canvas, original, reconstructed) {
+function drawSelectionOverlay(ctx, width, height, selection, style = {}) {
+  if (!selection) return;
+  const left = clamp(Math.min(selection.x0, selection.x1), 0, width);
+  const right = clamp(Math.max(selection.x0, selection.x1), 0, width);
+  if (right - left < 1) return;
+  ctx.fillStyle = style.fill || 'rgba(47, 125, 225, 0.16)';
+  ctx.strokeStyle = style.stroke || 'rgba(47, 125, 225, 0.75)';
+  ctx.lineWidth = 1;
+  if (style.dashed) ctx.setLineDash([4, 3]);
+  ctx.fillRect(left, 0, right - left, height);
+  ctx.strokeRect(left + 0.5, 0.5, Math.max(0, right - left - 1), height - 1);
+  if (style.dashed) ctx.setLineDash([]);
+}
+
+function normalizeDomain(domain, maxIndex) {
+  const full = { start: 0, end: maxIndex };
+  if (maxIndex <= 0) return full;
+  if (!domain || !Number.isFinite(domain.start) || !Number.isFinite(domain.end)) return full;
+  let start = clamp(domain.start, 0, maxIndex);
+  let end = clamp(domain.end, 0, maxIndex);
+  if (end < start) [start, end] = [end, start];
+  if (end - start < 1) end = Math.min(maxIndex, start + 1);
+  return { start, end };
+}
+
+function drawSignalOverlay(canvas, original, reconstructed, options = {}) {
   const ctx = canvas.getContext('2d');
   const { width, height } = canvas;
   clearCanvas(ctx, width, height, 'x');
   if (!original.length) return;
+  const domain = normalizeDomain(options.domain, original.length - 1);
+  const start = Math.floor(domain.start);
+  const end = Math.ceil(domain.end);
+  const span = Math.max(1, end - start);
+  let visiblePeak = 1e-6;
+  for (let i = start; i <= end; i += 1) {
+    visiblePeak = Math.max(visiblePeak, Math.abs(original[i] ?? 0), Math.abs(reconstructed[i] ?? 0));
+  }
+  const yScale = (height * 0.42) / visiblePeak;
 
   const draw = (values, color) => {
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    for (let i = 0; i < values.length; i += 1) {
-      const x = (i / Math.max(1, values.length - 1)) * width;
-      const y = height / 2 - values[i] * (height * 0.42);
-      if (i === 0) ctx.moveTo(x, y);
+    for (let i = start; i <= end; i += 1) {
+      const x = ((i - start) / span) * width;
+      const y = height / 2 - (values[i] ?? 0) * yScale;
+      if (i === start) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
@@ -472,15 +518,25 @@ function drawSignalOverlay(canvas, original, reconstructed) {
 
   draw(original, '#2f7de1');
   draw(reconstructed, '#d1691b');
+  drawSelectionOverlay(ctx, width, height, options.hoverSelection, {
+    fill: 'rgba(16, 167, 127, 0.10)',
+    stroke: 'rgba(16, 167, 127, 0.70)',
+    dashed: true
+  });
+  drawSelectionOverlay(ctx, width, height, options.selection);
 }
 
-function drawSpectrum(canvas, bins, color) {
+function drawSpectrum(canvas, bins, color, options = {}) {
   const ctx = canvas.getContext('2d');
   const { width, height } = canvas;
   clearCanvas(ctx, width, height, 'y');
   if (!bins.length) return;
 
-  const visible = bins.slice(0, Math.min(256, bins.length));
+  const domain = normalizeDomain(options.domain, bins.length - 1);
+  const start = Math.floor(domain.start);
+  const end = Math.ceil(domain.end);
+  const visible = bins.slice(start, end + 1);
+  if (!visible.length) return;
   const maxMagnitude = Math.max(...visible.map((bin) => bin.magnitude), 1e-9);
   const barWidth = width / visible.length;
   ctx.fillStyle = color;
@@ -490,6 +546,301 @@ function drawSpectrum(canvas, bins, color) {
     const y = height - barHeight;
     ctx.fillRect(x, y, Math.max(1, barWidth - 2), barHeight);
   }
+  drawSelectionOverlay(ctx, width, height, options.hoverSelection, {
+    fill: 'rgba(16, 167, 127, 0.10)',
+    stroke: 'rgba(16, 167, 127, 0.70)',
+    dashed: true
+  });
+  drawSelectionOverlay(ctx, width, height, options.selection);
+}
+
+function attachPlotInteractions(config) {
+  const {
+    canvas,
+    tooltip,
+    resetButton,
+    getDataLength,
+    getTooltipHtml,
+    requestRender
+  } = config;
+  const plotArea = canvas.parentElement;
+
+  const interaction = {
+    zoomDomain: null,
+    isDragging: false,
+    pointerId: null,
+    hoverPx: null,
+    dragStartPx: 0,
+    dragCurrentPx: 0,
+    isPanning: false,
+    panStartPx: 0,
+    panDomainStart: 0,
+    panDomainEnd: 0
+  };
+
+  const getDomain = () => {
+    const maxIndex = Math.max(0, getDataLength() - 1);
+    return normalizeDomain(interaction.zoomDomain, maxIndex);
+  };
+
+  const getSelection = () => {
+    if (!interaction.isDragging) return null;
+    const clientWidth = Math.max(1, canvas.clientWidth || canvas.width);
+    const scaleX = canvas.width / clientWidth;
+    return {
+      x0: interaction.dragStartPx * scaleX,
+      x1: interaction.dragCurrentPx * scaleX
+    };
+  };
+
+  const getHoverSelection = () => {
+    if (interaction.isDragging || interaction.hoverPx === null) return null;
+    const dataLength = getDataLength();
+    if (!dataLength) return null;
+    const domain = getDomain();
+    const span = Math.max(1, domain.end - domain.start);
+    const previewSpan = Math.max(8, Math.round(span * 0.24));
+    const width = Math.max(1, canvas.clientWidth || canvas.width);
+    const centerRatio = clamp(interaction.hoverPx / width, 0, 1);
+    const center = domain.start + centerRatio * span;
+    const start = center - previewSpan / 2;
+    const end = center + previewSpan / 2;
+    const clamped = normalizeDomain({ start, end }, Math.max(0, dataLength - 1));
+    const scaleX = canvas.width / width;
+    const x0 = ((clamped.start - domain.start) / Math.max(1e-9, span)) * width * scaleX;
+    const x1 = ((clamped.end - domain.start) / Math.max(1e-9, span)) * width * scaleX;
+    return { x0, x1 };
+  };
+
+  const hideTooltip = () => {
+    if (tooltip) tooltip.hidden = true;
+  };
+
+  const toCanvasX = (event) => {
+    const rect = plotArea.getBoundingClientRect();
+    return clamp(event.clientX - rect.left, 0, rect.width);
+  };
+
+  const xToIndex = (canvasX) => {
+    const domain = getDomain();
+    const width = Math.max(1, canvas.clientWidth || canvas.width);
+    const ratio = canvasX / width;
+    const raw = domain.start + ratio * (domain.end - domain.start);
+    return clamp(Math.round(raw), 0, Math.max(0, getDataLength() - 1));
+  };
+
+  const showTooltip = (event) => {
+    if (!tooltip || interaction.isDragging) return;
+    const dataLength = getDataLength();
+    if (!dataLength) {
+      hideTooltip();
+      return;
+    }
+    const areaRect = plotArea.getBoundingClientRect();
+    const canvasX = toCanvasX(event);
+    const index = xToIndex(canvasX);
+    tooltip.innerHTML = getTooltipHtml(index);
+    tooltip.hidden = false;
+
+    const xPadding = 10;
+    const yPadding = 10;
+    const maxLeft = Math.max(0, (canvas.clientWidth || canvas.width) - tooltip.offsetWidth - 6);
+    const maxTop = Math.max(0, (canvas.clientHeight || canvas.height) - tooltip.offsetHeight - 6);
+    const left = clamp(event.clientX - areaRect.left + xPadding, 6, maxLeft);
+    const top = clamp(event.clientY - areaRect.top + yPadding, 6, maxTop);
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  };
+
+  const endDrag = (event) => {
+    if (!interaction.isDragging) return;
+    if (event) interaction.dragCurrentPx = toCanvasX(event);
+    interaction.isDragging = false;
+    interaction.pointerId = null;
+    const width = Math.max(1, canvas.clientWidth || canvas.width);
+    const minPx = Math.min(interaction.dragStartPx, interaction.dragCurrentPx);
+    const maxPx = Math.max(interaction.dragStartPx, interaction.dragCurrentPx);
+    const movedPx = maxPx - minPx;
+    if (movedPx >= 4) {
+      const domain = getDomain();
+      const startRatio = clamp(minPx / width, 0, 1);
+      const endRatio = clamp(maxPx / width, 0, 1);
+      const nextStart = domain.start + startRatio * (domain.end - domain.start);
+      const nextEnd = domain.start + endRatio * (domain.end - domain.start);
+      interaction.zoomDomain = normalizeDomain({ start: nextStart, end: nextEnd }, Math.max(0, getDataLength() - 1));
+    } else {
+      const domain = getDomain();
+      const span = Math.max(1, domain.end - domain.start);
+      const previewSpan = Math.max(8, span * 0.24);
+      const clickRatio = clamp(interaction.dragCurrentPx / width, 0, 1);
+      const center = domain.start + clickRatio * span;
+      const nextStart = center - previewSpan / 2;
+      const nextEnd = center + previewSpan / 2;
+      interaction.zoomDomain = normalizeDomain(
+        { start: nextStart, end: nextEnd },
+        Math.max(0, getDataLength() - 1)
+      );
+    }
+    requestRender();
+  };
+
+  const startPan = (event) => {
+    if (!interaction.zoomDomain) return false;
+    interaction.isPanning = true;
+    interaction.pointerId = event.pointerId;
+    interaction.panStartPx = toCanvasX(event);
+    const domain = getDomain();
+    interaction.panDomainStart = domain.start;
+    interaction.panDomainEnd = domain.end;
+    hideTooltip();
+    plotArea.classList.add('is-panning');
+    plotArea.setPointerCapture(event.pointerId);
+    return true;
+  };
+
+  const updatePan = (event) => {
+    if (!interaction.isPanning) return;
+    const width = Math.max(1, canvas.clientWidth || canvas.width);
+    const maxIndex = Math.max(0, getDataLength() - 1);
+    const domainSpan = interaction.panDomainEnd - interaction.panDomainStart;
+    const currentPx = toCanvasX(event);
+    const deltaPx = currentPx - interaction.panStartPx;
+    const deltaDomain = (deltaPx / width) * domainSpan;
+    let nextStart = interaction.panDomainStart - deltaDomain;
+    let nextEnd = interaction.panDomainEnd - deltaDomain;
+    if (nextStart < 0) {
+      nextEnd += -nextStart;
+      nextStart = 0;
+    }
+    if (nextEnd > maxIndex) {
+      const over = nextEnd - maxIndex;
+      nextStart -= over;
+      nextEnd = maxIndex;
+    }
+    interaction.zoomDomain = normalizeDomain({ start: nextStart, end: nextEnd }, maxIndex);
+    requestRender();
+  };
+
+  const endPan = () => {
+    if (!interaction.isPanning) return;
+    interaction.isPanning = false;
+    interaction.pointerId = null;
+    plotArea.classList.remove('is-panning');
+    requestRender();
+  };
+
+  plotArea.addEventListener('pointermove', (event) => {
+    if (interaction.isPanning) {
+      updatePan(event);
+      return;
+    }
+    if (interaction.isDragging) {
+      interaction.dragCurrentPx = toCanvasX(event);
+      requestRender();
+      return;
+    }
+    interaction.hoverPx = toCanvasX(event);
+    requestRender();
+    showTooltip(event);
+  });
+
+  plotArea.addEventListener('pointerleave', () => {
+    interaction.hoverPx = null;
+    hideTooltip();
+    requestRender();
+  });
+
+  plotArea.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    // Keep default behavior as zoom (click or drag). Pan only with modifier.
+    if (interaction.zoomDomain && (event.altKey || event.shiftKey) && startPan(event)) {
+      event.preventDefault();
+      return;
+    }
+    interaction.isDragging = true;
+    interaction.pointerId = event.pointerId;
+    interaction.dragStartPx = toCanvasX(event);
+    interaction.dragCurrentPx = interaction.dragStartPx;
+    hideTooltip();
+    plotArea.setPointerCapture(event.pointerId);
+    requestRender();
+    event.preventDefault();
+  });
+
+  plotArea.addEventListener('pointerup', (event) => {
+    if (interaction.isPanning) {
+      if (interaction.pointerId !== null && event.pointerId !== interaction.pointerId) return;
+      endPan();
+      return;
+    }
+    if (!interaction.isDragging) return;
+    if (interaction.pointerId !== null && event.pointerId !== interaction.pointerId) return;
+    endDrag(event);
+  });
+
+  plotArea.addEventListener('pointercancel', () => {
+    if (interaction.isPanning) {
+      endPan();
+      return;
+    }
+    if (!interaction.isDragging) return;
+    endDrag();
+  });
+
+  window.addEventListener('blur', () => {
+    if (interaction.isPanning) {
+      endPan();
+      return;
+    }
+    if (!interaction.isDragging) return;
+    endDrag();
+  });
+
+  plotArea.addEventListener('wheel', (event) => {
+    if (!interaction.zoomDomain) return;
+    event.preventDefault();
+    const direction = Math.sign(event.deltaY);
+    if (direction === 0) return;
+    const maxIndex = Math.max(0, getDataLength() - 1);
+    const domain = getDomain();
+    const span = Math.max(1, domain.end - domain.start);
+    const panStep = Math.max(1, span * 0.12);
+    const shift = direction > 0 ? panStep : -panStep;
+    let nextStart = domain.start + shift;
+    let nextEnd = domain.end + shift;
+    if (nextStart < 0) {
+      nextEnd += -nextStart;
+      nextStart = 0;
+    }
+    if (nextEnd > maxIndex) {
+      const over = nextEnd - maxIndex;
+      nextStart -= over;
+      nextEnd = maxIndex;
+    }
+    interaction.zoomDomain = normalizeDomain({ start: nextStart, end: nextEnd }, maxIndex);
+    requestRender();
+  }, { passive: false });
+
+  if (resetButton) {
+    resetButton.addEventListener('click', () => {
+      interaction.zoomDomain = null;
+      interaction.hoverPx = null;
+      interaction.isPanning = false;
+      plotArea.classList.remove('is-panning');
+      hideTooltip();
+      requestRender();
+    });
+  }
+
+  return {
+    getRenderOptions() {
+      return {
+        domain: getDomain(),
+        selection: getSelection(),
+        hoverSelection: getHoverSelection()
+      };
+    }
+  };
 }
 
 function renderComponentsList(bins) {
@@ -511,6 +862,22 @@ function renderComponentsList(bins) {
   els.componentsList.innerHTML = rows.join('');
 }
 
+function renderPlots() {
+  const timeOptions = plotInteractions.time
+    ? plotInteractions.time.getRenderOptions()
+    : { domain: null, selection: null, hoverSelection: null };
+  const originalSpectrumOptions = plotInteractions.originalSpectrum
+    ? plotInteractions.originalSpectrum.getRenderOptions()
+    : { domain: null, selection: null, hoverSelection: null };
+  const filteredSpectrumOptions = plotInteractions.filteredSpectrum
+    ? plotInteractions.filteredSpectrum.getRenderOptions()
+    : { domain: null, selection: null, hoverSelection: null };
+
+  drawSignalOverlay(els.signalCanvas, state.analysisSignal, state.reconstructedSignal, timeOptions);
+  drawSpectrum(els.originalSpectrumCanvas, state.originalSpectrumHalf, '#10a77f', originalSpectrumOptions);
+  drawSpectrum(els.filteredSpectrumCanvas, state.filteredSpectrumHalf, '#d1691b', filteredSpectrumOptions);
+}
+
 function analyze() {
   setStatus('Analyzing...');
   const rawSignal = generateSignalRaw();
@@ -521,13 +888,68 @@ function analyze() {
   state.filteredSpectrumHalf = magnitudeHalf(state.filteredSpectrumFull);
   state.reconstructedSignal = idft(state.filteredSpectrumFull);
 
-  drawSignalOverlay(els.signalCanvas, state.analysisSignal, state.reconstructedSignal);
-  drawSpectrum(els.originalSpectrumCanvas, state.originalSpectrumHalf, '#10a77f');
-  drawSpectrum(els.filteredSpectrumCanvas, state.filteredSpectrumHalf, '#d1691b');
+  renderPlots();
   renderComponentsList(state.originalSpectrumHalf);
   renderFormulaPanel();
   renderBinHzHelpers();
   setStatus('Ready');
+}
+
+function setupPlotInteractionBindings() {
+  plotInteractions.time = attachPlotInteractions({
+    canvas: els.signalCanvas,
+    tooltip: els.timeTooltip,
+    resetButton: els.resetZoomTime,
+    getDataLength: () => state.analysisSignal.length,
+    getTooltipHtml: (index) => {
+      const original = state.analysisSignal[index] ?? 0;
+      const reconstructed = state.reconstructedSignal[index] ?? 0;
+      const timeSec = index / state.sampleRate;
+      return [
+        `n: ${index}`,
+        `t: ${timeSec.toFixed(4)} s`,
+        `amp: ${original.toFixed(3)}`,
+        `recon: ${reconstructed.toFixed(3)}`
+      ].join('<br>');
+    },
+    requestRender: renderPlots
+  });
+
+  plotInteractions.originalSpectrum = attachPlotInteractions({
+    canvas: els.originalSpectrumCanvas,
+    tooltip: els.originalSpectrumTooltip,
+    resetButton: els.resetZoomOriginalSpectrum,
+    getDataLength: () => state.originalSpectrumHalf.length,
+    getTooltipHtml: (index) => {
+      const bin = state.originalSpectrumHalf[index];
+      const magnitude = bin ? bin.magnitude : 0;
+      const hz = (index * state.sampleRate) / state.sampleCount;
+      return [
+        `k: ${index}`,
+        `${hz.toFixed(1)} Hz`,
+        `mag: ${magnitude.toFixed(6)}`
+      ].join('<br>');
+    },
+    requestRender: renderPlots
+  });
+
+  plotInteractions.filteredSpectrum = attachPlotInteractions({
+    canvas: els.filteredSpectrumCanvas,
+    tooltip: els.filteredSpectrumTooltip,
+    resetButton: els.resetZoomFilteredSpectrum,
+    getDataLength: () => state.filteredSpectrumHalf.length,
+    getTooltipHtml: (index) => {
+      const bin = state.filteredSpectrumHalf[index];
+      const magnitude = bin ? bin.magnitude : 0;
+      const hz = (index * state.sampleRate) / state.sampleCount;
+      return [
+        `k: ${index}`,
+        `${hz.toFixed(1)} Hz`,
+        `mag: ${magnitude.toFixed(6)}`
+      ].join('<br>');
+    },
+    requestRender: renderPlots
+  });
 }
 
 function resetFilters() {
@@ -645,6 +1067,7 @@ function initializeDefaults() {
 }
 
 function init() {
+  setupPlotInteractionBindings();
   initializeDefaults();
   bindEvents();
   analyze();

@@ -228,6 +228,50 @@
   font-weight: 700;
 }
 
+.bespoke .plot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.bespoke .plot-header h2 {
+  margin: 0;
+}
+
+.bespoke .plot-reset-btn {
+  min-height: 28px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.bespoke .plot-area {
+  position: relative;
+  touch-action: none;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.bespoke .plot-area.is-panning {
+  cursor: grabbing;
+}
+
+.bespoke .plot-tooltip {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #1d2940;
+  background: #ffffff;
+  border: 1px solid #d9e2f3;
+  border-radius: 8px;
+  box-shadow: 0 6px 14px rgba(22, 34, 60, 0.14);
+  padding: 6px 8px;
+  white-space: nowrap;
+}
+
 .bespoke .formula-panel {
   display: grid;
   grid-template-columns: 92px 1fr;

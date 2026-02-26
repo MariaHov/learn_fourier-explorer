@@ -84,6 +84,13 @@ const els = {
   closeHelp: document.getElementById('btn-close-help')
 };
 
+const cosmoEls = {
+  root: document.getElementById('cosmo-greeter'),
+  text: document.getElementById('cosmo-text'),
+  img: document.getElementById('cosmo-img'),
+  close: document.getElementById('btn-cosmo-close')
+};
+
 const plotInteractions = {
   time: null,
   originalSpectrum: null,
@@ -92,6 +99,100 @@ const plotInteractions = {
 
 function setStatus(text) {
   els.status.textContent = text;
+}
+
+let cosmoTimer = null;
+let cosmoHideTimer = null;
+let cosmoEnabled = true;
+let cosmoLastDismissedAt = 0;
+let cosmoSceneIndex = 0;
+let cosmoHearYouShown = false;
+
+const cosmoScenes = [
+  {
+    src: '/cosmo-wave.png',
+    alt: 'Cosmo waving',
+    text: 'Hi! Welcome to the Fourier Explorer.'
+  },
+  {
+    src: '/Torso_Thumbs_Up.png',
+    alt: 'Cosmo thumbs up',
+    text: 'Tip: drag to zoom plots (then Reset zoom).'
+  },
+  {
+    src: '/cosmo_Torso_Star_Eyes.svg',
+    alt: 'Cosmo excited',
+    text: 'Look for peaks in the spectrum: those are your strongest frequencies.'
+  },
+  {
+    src: '/Cosmo_Laying_Exhausted.svg',
+    alt: 'Cosmo resting',
+    text: 'Fourier can feel exhausting at first. Keep going, you got this.'
+  }
+];
+
+function scheduleCosmoGreeting() {
+  if (!cosmoEnabled || !cosmoEls.root) return;
+  if (cosmoTimer) clearTimeout(cosmoTimer);
+
+  // First greeting should be quick; afterwards keep it periodic.
+  let delay;
+  if (cosmoSceneIndex === 0) {
+    delay = 5000;
+  } else {
+    const minMs = 30000;
+    const maxMs = 40000;
+    delay = Math.floor(minMs + Math.random() * (maxMs - minMs));
+  }
+  cosmoTimer = setTimeout(() => {
+    showCosmoGreeting();
+    scheduleCosmoGreeting();
+  }, delay);
+}
+
+function hideCosmoGreeting() {
+  if (!cosmoEls.root) return;
+  if (cosmoHideTimer) clearTimeout(cosmoHideTimer);
+  cosmoEls.root.hidden = true;
+  cosmoEls.root.classList.remove('is-visible');
+}
+
+function showCosmoOneShot(scene, durationMs = 6000) {
+  if (!cosmoEnabled || !cosmoEls.root || !cosmoEls.text) return;
+  if (!scene) return;
+
+  cosmoEls.text.textContent = scene.text || 'Hi!';
+  if (cosmoEls.img) {
+    cosmoEls.img.src = scene.src || '/cosmo-wave.png';
+    cosmoEls.img.alt = scene.alt || 'Cosmo';
+  }
+
+  cosmoEls.root.hidden = false;
+  cosmoEls.root.classList.add('is-visible');
+
+  if (cosmoHideTimer) clearTimeout(cosmoHideTimer);
+  cosmoHideTimer = setTimeout(() => hideCosmoGreeting(), durationMs);
+}
+
+function showCosmoGreeting() {
+  if (!cosmoEnabled || !cosmoEls.root || !cosmoEls.text) return;
+  if (els.demoProcessing && !els.demoProcessing.hidden) return;
+  if (Date.now() - cosmoLastDismissedAt < 20000) return;
+
+  const scene = cosmoScenes[cosmoSceneIndex % cosmoScenes.length];
+  cosmoSceneIndex += 1;
+
+  cosmoEls.text.textContent = scene.text;
+  if (cosmoEls.img) {
+    cosmoEls.img.src = scene.src;
+    cosmoEls.img.alt = scene.alt || 'Cosmo';
+  }
+
+  cosmoEls.root.hidden = false;
+  cosmoEls.root.classList.add('is-visible');
+
+  if (cosmoHideTimer) clearTimeout(cosmoHideTimer);
+  cosmoHideTimer = setTimeout(() => hideCosmoGreeting(), 6000);
 }
 
 function setDemoProcessing(active, text = '') {
@@ -690,8 +791,11 @@ function renderFormulaPanel() {
 
 let audioContext = null;
 let activeSourceNode = null;
+let activePlaybackTimers = [];
 
 function stopPlayback() {
+  for (const timer of activePlaybackTimers) clearTimeout(timer);
+  activePlaybackTimers = [];
   if (activeSourceNode) {
     try {
       activeSourceNode.stop();
@@ -823,12 +927,34 @@ function playSignal(signal, label, options = {}) {
   activeSourceNode = sourceNode;
   setStatus(label);
 
+  if (typeof options.onNearEnd === 'function') {
+    const beforeSeconds = Number.isFinite(options.nearEndSeconds) ? options.nearEndSeconds : 0.5;
+    const delayMs = Math.max(0, (buffer.duration - Math.max(0, beforeSeconds)) * 1000);
+    const timer = setTimeout(() => {
+      try {
+        options.onNearEnd();
+      } catch (_) {
+        // ignore callback errors
+      }
+    }, delayMs);
+    activePlaybackTimers.push(timer);
+  }
+
   sourceNode.onended = () => {
+    for (const timer of activePlaybackTimers) clearTimeout(timer);
+    activePlaybackTimers = [];
     if (activeSourceNode === sourceNode) {
       activeSourceNode.disconnect();
       activeSourceNode = null;
     }
     setStatus('Ready');
+    if (typeof options.onEnded === 'function') {
+      try {
+        options.onEnded();
+      } catch (_) {
+        // ignore callback errors
+      }
+    }
   };
 }
 
@@ -1636,7 +1762,17 @@ function bindEvents() {
       playSignal(leveledReconstructed, 'Playing reconstructed demo', {
         tile: false,
         sampleRate: state.sampleRate,
-        gain: 2.5
+        gain: 2.5,
+        nearEndSeconds: 0.5,
+        onNearEnd: () => {
+          if (cosmoHearYouShown) return;
+          cosmoHearYouShown = true;
+          showCosmoOneShot({
+            src: '/i_can_hear_you.png',
+            alt: 'Cosmo can hear you',
+            text: 'Yes, I can hear you now.'
+          }, 6500);
+        }
       });
       return;
     }
@@ -1674,6 +1810,16 @@ function bindEvents() {
   });
   els.help.addEventListener('click', () => els.helpDialog.showModal());
   els.closeHelp.addEventListener('click', () => els.helpDialog.close());
+
+  if (cosmoEls.close) {
+    cosmoEls.close.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      cosmoLastDismissedAt = Date.now();
+      hideCosmoGreeting();
+      scheduleCosmoGreeting();
+    });
+  }
 }
 
 function initializeDefaults() {
@@ -1708,6 +1854,7 @@ function init() {
   initializeDefaults();
   bindEvents();
   analyze();
+  scheduleCosmoGreeting();
 }
 
 init();

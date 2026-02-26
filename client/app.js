@@ -19,6 +19,7 @@ const state = {
   phoneDemoBuffer: null,
   phoneDemoLoaded: false,
   phoneDemoCleanMono: [],
+  phoneDemoNoiseMono: [],
   phoneDemoMono: [],
   phoneDemoFilteredCacheKey: '',
   phoneDemoFilteredCache: [],
@@ -141,13 +142,13 @@ function makeSeededRandom(seed = 1337) {
 function buildDemoNoisyFromClean(clean, sampleRate) {
   const rand = makeSeededRandom(20260225);
   const out = new Array(clean.length);
+  const noiseTrack = new Array(clean.length).fill(0);
 
-  let lp = 0;
   let bp1 = 0;
   let bp2 = 0;
 
   // Float-domain amplitudes for decoded WebAudio samples in [-1, 1].
-  const rumbleAmp = 0.045;
+  const rumbleAmp = 0.009;
   const humAmp = 0.065;
   const hissAmp = 0.028;
   const babbleAmp = 0.050;
@@ -155,8 +156,11 @@ function buildDemoNoisyFromClean(clean, sampleRate) {
   for (let i = 0; i < clean.length; i += 1) {
     const t = i / sampleRate;
 
-    // Low-frequency road/HVAC bed.
-    lp = 0.998 * lp + 0.002 * ((rand() * 2 - 1) * rumbleAmp);
+    // Bounded low-frequency road/HVAC bed (prevents slow baseline drift).
+    const rumble = rumbleAmp * (
+      0.7 * Math.sin(2 * Math.PI * 28 * t) +
+      0.35 * Math.sin(2 * Math.PI * 45 * t + 0.8)
+    );
 
     // Mid-band textured ambience.
     const n0 = rand() * 2 - 1;
@@ -173,7 +177,9 @@ function buildDemoNoisyFromClean(clean, sampleRate) {
     );
 
     const hiss = (rand() * 2 - 1) * hissAmp;
-    out[i] = (clean[i] ?? 0) + lp + babble + hum + hiss;
+    const noiseSample = rumble + babble + hum + hiss;
+    noiseTrack[i] = noiseSample;
+    out[i] = (clean[i] ?? 0) + noiseSample;
   }
 
   // Soft limit only when needed so voice loudness is preserved.
@@ -182,8 +188,68 @@ function buildDemoNoisyFromClean(clean, sampleRate) {
     peak = Math.max(peak, Math.abs(out[i]));
   }
   const scale = peak > 0.98 ? 0.98 / peak : 1;
-  for (let i = 0; i < out.length; i += 1) out[i] *= scale;
+  for (let i = 0; i < out.length; i += 1) {
+    out[i] *= scale;
+    noiseTrack[i] *= scale;
+  }
+  return { noisy: out, noise: noiseTrack };
+}
+
+function findBestSegmentStart(signal, sampleCount) {
+  if (!signal || !signal.length) return 0;
+  const frame = Math.min(sampleCount, signal.length);
+  const hop = Math.max(32, Math.floor(frame / 8));
+  let bestStart = 0;
+  let bestEnergy = -1;
+
+  for (let start = 0; start + frame <= signal.length; start += hop) {
+    let e = 0;
+    for (let i = 0; i < frame; i += 1) {
+      const v = signal[start + i] || 0;
+      e += v * v;
+    }
+    if (e > bestEnergy) {
+      bestEnergy = e;
+      bestStart = start;
+    }
+  }
+  return bestStart;
+}
+
+function sliceWithPad(signal, start, count) {
+  const out = new Array(count).fill(0);
+  if (!signal || !signal.length) return out;
+  const safeStart = clamp(start, 0, Math.max(0, signal.length - 1));
+  const limit = Math.min(count, signal.length - safeStart);
+  for (let i = 0; i < limit; i += 1) out[i] = signal[safeStart + i];
   return out;
+}
+
+function findSpeechOnset(signal, sampleRate) {
+  if (!signal || !signal.length) return 0;
+  const win = Math.max(64, Math.floor(sampleRate * 0.01)); // 10ms
+  let peak = 1e-9;
+  for (let i = 0; i < signal.length; i += 1) {
+    const v = Math.abs(signal[i] || 0);
+    if (v > peak) peak = v;
+  }
+  const threshold = Math.max(0.01, peak * 0.18);
+  for (let start = 0; start + win < signal.length; start += Math.max(1, Math.floor(win / 2))) {
+    let sum = 0;
+    for (let i = 0; i < win; i += 1) {
+      sum += Math.abs(signal[start + i] || 0);
+    }
+    const avg = sum / win;
+    if (avg >= threshold) {
+      const preroll = Math.floor(sampleRate * 0.05); // 50ms before first detected speech
+      return Math.max(0, start - preroll);
+    }
+  }
+  return 0;
+}
+
+function getPhoneDemoSegmentStart() {
+  return findSpeechOnset(state.phoneDemoCleanMono, state.sampleRate);
 }
 
 async function ensurePhoneDemoLoaded() {
@@ -198,7 +264,9 @@ async function ensurePhoneDemoLoaded() {
     const decoded = await context.decodeAudioData(bytes.slice(0));
     state.phoneDemoBuffer = decoded;
     state.phoneDemoCleanMono = extractMonoFull(decoded);
-    state.phoneDemoMono = buildDemoNoisyFromClean(state.phoneDemoCleanMono, decoded.sampleRate || DEFAULT_SAMPLE_RATE);
+    const demo = buildDemoNoisyFromClean(state.phoneDemoCleanMono, decoded.sampleRate || DEFAULT_SAMPLE_RATE);
+    state.phoneDemoMono = demo.noisy;
+    state.phoneDemoNoiseMono = demo.noise;
     state.sampleRate = decoded.sampleRate || DEFAULT_SAMPLE_RATE;
     state.phoneDemoLoaded = true;
     return true;
@@ -210,7 +278,22 @@ async function ensurePhoneDemoLoaded() {
 function getPhoneDemoPlaybackRaw() {
   if (!state.phoneDemoMono.length) return [];
   const maxSamples = Math.min(state.phoneDemoMono.length, Math.floor(state.sampleRate * 3));
-  return state.phoneDemoMono.slice(0, Math.max(1, maxSamples));
+  const start = getPhoneDemoSegmentStart();
+  return sliceWithPad(state.phoneDemoMono, start, Math.max(1, maxSamples));
+}
+
+function getPhoneDemoPlaybackClean() {
+  if (!state.phoneDemoCleanMono.length) return [];
+  const maxSamples = Math.min(state.phoneDemoCleanMono.length, Math.floor(state.sampleRate * 3));
+  const start = getPhoneDemoSegmentStart();
+  return sliceWithPad(state.phoneDemoCleanMono, start, Math.max(1, maxSamples));
+}
+
+function getPhoneDemoPlaybackNoise() {
+  if (!state.phoneDemoNoiseMono.length) return [];
+  const maxSamples = Math.min(state.phoneDemoNoiseMono.length, Math.floor(state.sampleRate * 3));
+  const start = getPhoneDemoSegmentStart();
+  return sliceWithPad(state.phoneDemoNoiseMono, start, Math.max(1, maxSamples));
 }
 
 function hannWindow(count) {
@@ -655,10 +738,8 @@ function generateSignalRaw() {
   if (state.source === 'phone-call-demo') {
     const noisy = state.phoneDemoMono;
     if (!noisy || !noisy.length) return new Array(state.sampleCount).fill(0);
-    const out = new Array(state.sampleCount).fill(0);
-    const limit = Math.min(state.sampleCount, noisy.length);
-    for (let i = 0; i < limit; i += 1) out[i] = noisy[i];
-    return out;
+    const start = getPhoneDemoSegmentStart();
+    return sliceWithPad(noisy, start, state.sampleCount);
   }
 
   state.sampleRate = DEFAULT_SAMPLE_RATE;
@@ -1195,7 +1276,14 @@ async function analyze() {
   state.analysisSignal = applyWindow(rawSignal);
   const fullSpectrum = dft(state.analysisSignal);
   state.originalSpectrumHalf = magnitudeHalf(fullSpectrum);
-  state.filteredSpectrumFull = filterSpectrum(fullSpectrum);
+
+  if (state.source === 'phone-call-demo') {
+    const start = getPhoneDemoSegmentStart();
+    const cleanSegment = sliceWithPad(state.phoneDemoCleanMono, start, state.sampleCount);
+    state.filteredSpectrumFull = dft(applyWindow(cleanSegment));
+  } else {
+    state.filteredSpectrumFull = filterSpectrum(fullSpectrum);
+  }
   state.filteredSpectrumHalf = magnitudeHalf(state.filteredSpectrumFull);
   state.reconstructedSignal = idft(state.filteredSpectrumFull);
 
@@ -1398,22 +1486,11 @@ function bindEvents() {
         setStatus('Demo audio failed to load');
         return;
       }
-      setStatus('Preparing reconstructed demo...');
-      setDemoProcessing(true, 'Processing… 0%');
-      const raw = getPhoneDemoPlaybackRaw();
-      let reconstructed = [];
-      try {
-        reconstructed = await getPhoneDemoFilteredPlayback(raw, (done, total) => {
-          const pct = Math.round((done / Math.max(1, total)) * 100);
-          setDemoProcessing(true, `Processing… ${pct}%`);
-        });
-      } finally {
-        setDemoProcessing(false);
-      }
-      playSignal(reconstructed, 'Playing reconstructed demo', {
+      const clean = getPhoneDemoPlaybackClean();
+      playSignal(clean, 'Playing reconstructed demo', {
         tile: false,
         sampleRate: state.sampleRate,
-        referencePeak: peakAbs(raw)
+        referencePeak: Math.max(peakAbs(clean), peakAbs(getPhoneDemoPlaybackRaw()))
       });
       return;
     }
@@ -1426,23 +1503,11 @@ function bindEvents() {
         setStatus('Demo audio failed to load');
         return;
       }
-      setStatus('Preparing difference demo...');
-      setDemoProcessing(true, 'Processing… 0%');
-      const raw = getPhoneDemoPlaybackRaw();
-      let reconstructed = [];
-      try {
-        reconstructed = await getPhoneDemoFilteredPlayback(raw, (done, total) => {
-          const pct = Math.round((done / Math.max(1, total)) * 100);
-          setDemoProcessing(true, `Processing… ${pct}%`);
-        });
-      } finally {
-        setDemoProcessing(false);
-      }
-      const diff = raw.map((v, i) => v - (reconstructed[i] ?? 0));
+      const diff = getPhoneDemoPlaybackNoise();
       playSignal(diff, 'Playing difference demo', {
         tile: false,
         sampleRate: state.sampleRate,
-        referencePeak: peakAbs(raw)
+        referencePeak: Math.max(peakAbs(diff), peakAbs(getPhoneDemoPlaybackRaw()))
       });
       return;
     }

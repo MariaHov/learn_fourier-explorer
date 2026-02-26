@@ -51,6 +51,7 @@ const els = {
   harmonics: document.getElementById('harmonics'),
   harmonicsValue: document.getElementById('harmonics-value'),
   windowType: document.getElementById('window-type'),
+  notchControlsRow: document.getElementById('notch-controls-row'),
   lowPass: document.getElementById('low-pass'),
   lowPassValue: document.getElementById('low-pass-value'),
   lowPassHz: document.getElementById('low-pass-hz'),
@@ -113,6 +114,11 @@ function updateSourceControlVisibility() {
   }
   if (els.controlHarmonicsField) {
     els.controlHarmonicsField.classList.toggle('is-hidden-control', state.source !== 'square-series');
+  }
+
+  // Reduce clutter: hide notch bin/width sliders unless notch is enabled.
+  if (els.notchControlsRow) {
+    els.notchControlsRow.classList.toggle('is-hidden-control', !state.notchEnabled);
   }
 }
 
@@ -1570,6 +1576,7 @@ function bindEvents() {
 
   els.notchEnabled.addEventListener('change', (event) => {
     state.notchEnabled = Boolean(event.target.checked);
+    updateSourceControlVisibility();
     analyze();
   });
 

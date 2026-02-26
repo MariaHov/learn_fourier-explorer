@@ -221,7 +221,7 @@
 }
 
 .bespoke .is-hidden-control {
-  display: none;
+  display: none !important;
 }
 
 .bespoke .advanced-accordion {

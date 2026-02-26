@@ -27,6 +27,7 @@ const state = {
   rawSignal: [],
   analysisSignal: [],
   reconstructedSignal: [],
+  originalSpectrumFull: [],
   originalSpectrumHalf: [],
   filteredSpectrumHalf: [],
   filteredSpectrumFull: []
@@ -103,8 +104,9 @@ function setDemoProcessing(active, text = '') {
 
 function updateSourceControlVisibility() {
   const isPhoneDemo = state.source === 'phone-call-demo';
+  const isIrregularShape = state.source === 'irregular-shape';
   if (els.controlF1Field) {
-    els.controlF1Field.classList.toggle('is-hidden-control', isPhoneDemo);
+    els.controlF1Field.classList.toggle('is-hidden-control', isPhoneDemo || isIrregularShape);
   }
   if (els.controlF2Field) {
     els.controlF2Field.classList.toggle('is-hidden-control', state.source !== 'two-sines');
@@ -626,6 +628,16 @@ function renderFormulaPanel() {
   const f2 = state.freq2;
   const h = state.harmonics;
 
+  const renderFourierSumForCurrentSignal = () => {
+    const spectrum = state.originalSpectrumFull;
+    const N = state.sampleCount;
+    if (!spectrum || !spectrum.length || N <= 0) {
+      return '<div class="formula-line">x[n] ≈ Σ A_k cos(2πkn/N + φ_k)</div>';
+    }
+
+    return '<div class="formula-line">x[n] ≈ a0 + Σ A_k cos(2πkn/N + φ_k)</div>';
+  };
+
   if (state.source === 'sine') {
     els.formulaBody.innerHTML = [
       `<div class=\"formula-line\">x(t) = sin(2π · ${f1} · t)</div>`,
@@ -639,6 +651,11 @@ function renderFormulaPanel() {
       `<div class=\"formula-line\">x(t) = sin(2π · ${f1} · t) + sin(2π · ${f2} · t)</div>`,
       `<div class=\"formula-hint\">Spectrum: peaks near ${f1} Hz and ${f2} Hz.</div>`
     ].join('');
+    return;
+  }
+
+  if (state.source === 'irregular-shape') {
+    els.formulaBody.innerHTML = renderFourierSumForCurrentSignal();
     return;
   }
 
@@ -838,6 +855,21 @@ function generateSignalRaw() {
         0.6 * Math.sin(2 * Math.PI * state.freq1 * time) +
         0.4 * Math.sin(2 * Math.PI * state.freq2 * time)
       );
+    } else if (state.source === 'irregular-shape') {
+      const u = state.sampleCount > 1 ? index / (state.sampleCount - 1) : 0;
+      if (u < 0.15) {
+        sample = 0;
+      } else if (u < 0.35) {
+        sample = 3.2 * (u - 0.15);
+      } else if (u < 0.6) {
+        sample = 0.64 - 1.6 * (u - 0.35);
+      } else if (u < 0.85) {
+        sample = -0.16 + 1.0 * (u - 0.6);
+      } else if (u < 0.92) {
+        sample = 0.09;
+      } else {
+        sample = 0;
+      }
     } else if (state.source === 'square-series') {
       for (let odd = 1; odd <= (state.harmonics * 2 - 1); odd += 2) {
         sample += Math.sin(2 * Math.PI * odd * state.freq1 * time) / odd;
@@ -1371,6 +1403,7 @@ async function analyze() {
   state.rawSignal = rawSignal;
   state.analysisSignal = applyWindow(rawSignal);
   const fullSpectrum = dft(state.analysisSignal);
+  state.originalSpectrumFull = fullSpectrum;
   state.originalSpectrumHalf = magnitudeHalf(fullSpectrum);
 
   if (state.source === 'phone-call-demo') {

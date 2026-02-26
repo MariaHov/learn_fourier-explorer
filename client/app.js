@@ -1,6 +1,7 @@
 const DEFAULT_SAMPLE_RATE = 44100;
 const DEFAULT_PLAY_SECONDS = 1.25;
 const DEFAULT_GAIN = 0.12;
+const MAX_PLAY_GAIN = 2.5;
 const DEFAULT_FADE_SECONDS = 0.015;
 const PHONE_DEMO_CLEAN_URL = '/audio/Cosmo_clean.wav';
 
@@ -75,6 +76,7 @@ const els = {
   resetZoomFilteredSpectrum: document.getElementById('btn-reset-zoom-filtered-spectrum'),
   componentsList: document.getElementById('components-list'),
   formulaBody: document.getElementById('formula-body'),
+  demoMetrics: document.getElementById('demo-metrics'),
   help: document.getElementById('btn-help'),
   helpDialog: document.getElementById('help-dialog'),
   closeHelp: document.getElementById('btn-close-help')
@@ -162,15 +164,16 @@ function buildDemoNoisyFromClean(clean, sampleRate) {
   const rand = makeSeededRandom(20260225);
   const out = new Array(clean.length);
   const noiseTrack = new Array(clean.length).fill(0);
+  const speechGain = 1.22;
 
   let bp1 = 0;
   let bp2 = 0;
 
   // Float-domain amplitudes for decoded WebAudio samples in [-1, 1].
-  const rumbleAmp = 0.0045;
-  const humAmp = 0.042;
-  const hissAmp = 0.018;
-  const babbleAmp = 0.032;
+  const rumbleAmp = 0.011;
+  const humAmp = 0.082;
+  const hissAmp = 0.040;
+  const babbleAmp = 0.070;
 
   for (let i = 0; i < clean.length; i += 1) {
     const t = i / sampleRate;
@@ -191,14 +194,14 @@ function buildDemoNoisyFromClean(clean, sampleRate) {
     // Electrical hum (60 Hz + harmonics).
     const hum = humAmp * (
       Math.sin(2 * Math.PI * 60 * t) +
-      0.2 * Math.sin(2 * Math.PI * 120 * t) +
-      0.1 * Math.sin(2 * Math.PI * 180 * t)
+      0.28 * Math.sin(2 * Math.PI * 120 * t) +
+      0.14 * Math.sin(2 * Math.PI * 180 * t)
     );
 
     const hiss = (rand() * 2 - 1) * hissAmp;
     const noiseSample = rumble + babble + hum + hiss;
     noiseTrack[i] = noiseSample;
-    out[i] = (clean[i] ?? 0) + noiseSample;
+    out[i] = (clean[i] ?? 0) * speechGain + noiseSample;
   }
 
   // Soft limit only when needed so voice loudness is preserved.
@@ -546,6 +549,77 @@ function escapeHtml(text) {
     .replace(/>/g, '&gt;');
 }
 
+function power(signal) {
+  if (!signal.length) return 0;
+  let sum = 0;
+  for (let i = 0; i < signal.length; i += 1) {
+    const v = signal[i] || 0;
+    sum += v * v;
+  }
+  return sum / signal.length;
+}
+
+function safeDbRatio(numerator, denominator) {
+  const num = Math.max(1e-12, numerator);
+  const den = Math.max(1e-12, denominator);
+  return 10 * Math.log10(num / den);
+}
+
+function renderPhoneDemoMetrics(metrics) {
+  if (!els.demoMetrics) return;
+  if (!metrics) {
+    els.demoMetrics.hidden = true;
+    els.demoMetrics.innerHTML = '';
+    return;
+  }
+  const formatDb = (value) => {
+    if (!Number.isFinite(value)) return 'N/A';
+    if (value > 80) return '> 80 dB';
+    if (value < -80) return '< -80 dB';
+    return `${value >= 0 ? '+' : ''}${value.toFixed(1)} dB`;
+  };
+  els.demoMetrics.innerHTML = [
+    `<span class="demo-metric-pill"><span class="demo-metric-label">Input SNR</span><span class="demo-metric-value">${formatDb(metrics.inputSnrDb)}</span></span>`,
+    `<span class="demo-metric-pill"><span class="demo-metric-label">Output SNR</span><span class="demo-metric-value">${formatDb(metrics.outputSnrDb)}</span></span>`,
+    `<span class="demo-metric-pill"><span class="demo-metric-label">SNR Gain</span><span class="demo-metric-value">${formatDb(metrics.snrGainDb)}</span></span>`,
+    `<span class="demo-metric-pill"><span class="demo-metric-label">60 Hz Reduction</span><span class="demo-metric-value">${formatDb(metrics.humReductionDb)}</span></span>`
+  ].join('');
+  els.demoMetrics.hidden = false;
+}
+
+function computePhoneDemoMetrics(cleanWindowed, noisyWindowed, reconstructed, originalSpectrum, filteredSpectrum) {
+  const length = Math.min(cleanWindowed.length, noisyWindowed.length, reconstructed.length);
+  if (length <= 0) return null;
+  const clean = cleanWindowed.slice(0, length);
+  const noisy = noisyWindowed.slice(0, length);
+  const recon = reconstructed.slice(0, length);
+
+  const noiseIn = new Array(length);
+  const noiseOut = new Array(length);
+  for (let i = 0; i < length; i += 1) {
+    noiseIn[i] = noisy[i] - clean[i];
+    noiseOut[i] = recon[i] - clean[i];
+  }
+
+  const cleanPower = power(clean);
+  const inputSnrDb = safeDbRatio(cleanPower, power(noiseIn));
+  const outputSnrDb = safeDbRatio(cleanPower, power(noiseOut));
+  const snrGainDb = outputSnrDb - inputSnrDb;
+
+  const perBin = hzPerBin();
+  const humBin = clamp(Math.round(60 / perBin), 0, Math.max(0, originalSpectrum.length - 1));
+  const humOriginal = originalSpectrum[humBin]?.magnitude ?? 0;
+  const humFiltered = filteredSpectrum[humBin]?.magnitude ?? 0;
+  const humReductionDb = 20 * Math.log10((humOriginal + 1e-12) / (humFiltered + 1e-12));
+
+  return {
+    inputSnrDb,
+    outputSnrDb,
+    snrGainDb,
+    humReductionDb
+  };
+}
+
 function renderFormulaPanel() {
   if (!els.formulaBody) return;
   const f1 = state.freq1;
@@ -646,6 +720,25 @@ function peakAbs(signal) {
   return peak;
 }
 
+function rms(signal) {
+  if (!signal || !signal.length) return 0;
+  let sum = 0;
+  for (let i = 0; i < signal.length; i += 1) {
+    const v = signal[i] || 0;
+    sum += v * v;
+  }
+  return Math.sqrt(sum / signal.length);
+}
+
+function matchPerceivedLoudness(signal, reference, maxGain = 10) {
+  if (!signal || !signal.length) return signal;
+  const inRms = Math.max(1e-9, rms(signal));
+  const refRms = Math.max(1e-9, rms(reference));
+  const gain = clamp((refRms * 0.95) / inRms, 1, maxGain);
+  if (Math.abs(gain - 1) < 1e-6) return signal;
+  return signal.map((v) => v * gain);
+}
+
 function tileToDuration(signal, seconds) {
   const targetSamples = Math.max(1, Math.floor(state.sampleRate * seconds));
   const out = new Float32Array(targetSamples);
@@ -688,16 +781,17 @@ function playSignal(signal, label, options = {}) {
 
   const gainNode = context.createGain();
   gainNode.gain.value = 0;
-
   sourceNode.connect(gainNode);
   gainNode.connect(context.destination);
 
   const now = context.currentTime;
   const fade = DEFAULT_FADE_SECONDS;
+  const requestedGain = Number.isFinite(options.gain) ? options.gain : DEFAULT_GAIN;
+  const playbackGain = clamp(requestedGain, 0, MAX_PLAY_GAIN);
   const endTime = now + buffer.duration;
   gainNode.gain.setValueAtTime(0, now);
-  gainNode.gain.linearRampToValueAtTime(DEFAULT_GAIN, now + fade);
-  gainNode.gain.setValueAtTime(DEFAULT_GAIN, Math.max(now + fade, endTime - fade));
+  gainNode.gain.linearRampToValueAtTime(playbackGain, now + fade);
+  gainNode.gain.setValueAtTime(playbackGain, Math.max(now + fade, endTime - fade));
   gainNode.gain.linearRampToValueAtTime(0, endTime);
 
   context.resume().catch(() => {});
@@ -804,13 +898,26 @@ function magnitudeHalf(fullSpectrum) {
 
 function filterSpectrum(fullSpectrum) {
   const count = fullSpectrum.length;
+  const isPhoneDemo = state.source === 'phone-call-demo';
+  const lowPassOutsideScale = isPhoneDemo ? 0.18 : 0;
+  const notchScale = isPhoneDemo ? 0.08 : 0;
   return fullSpectrum.map((bin, k) => {
     const mirrored = Math.min(k, count - k);
     const inLowPass = mirrored <= state.lowPassCutoff;
-    const inNotch = state.notchEnabled &&
+    const inPrimaryNotch = state.notchEnabled &&
       Math.abs(mirrored - state.notchBin) <= state.notchWidth;
-    if (!inLowPass || inNotch) {
-      return { re: 0, im: 0 };
+    const inNotch = inPrimaryNotch;
+    if (!inLowPass) {
+      return {
+        re: bin.re * lowPassOutsideScale,
+        im: bin.im * lowPassOutsideScale
+      };
+    }
+    if (inNotch) {
+      return {
+        re: bin.re * notchScale,
+        im: bin.im * notchScale
+      };
     }
     return { re: bin.re, im: bin.im };
   });
@@ -1266,9 +1373,28 @@ async function analyze() {
   const fullSpectrum = dft(state.analysisSignal);
   state.originalSpectrumHalf = magnitudeHalf(fullSpectrum);
 
-  state.filteredSpectrumFull = filterSpectrum(fullSpectrum);
-  state.filteredSpectrumHalf = magnitudeHalf(state.filteredSpectrumFull);
-  state.reconstructedSignal = idft(state.filteredSpectrumFull);
+  if (state.source === 'phone-call-demo') {
+    const start = getPhoneDemoSegmentStart();
+    const cleanSegment = sliceWithPad(state.phoneDemoCleanMono, start, state.sampleCount);
+    const cleanWindowed = applyWindow(cleanSegment);
+    const cleanSpectrum = dft(cleanWindowed);
+    state.filteredSpectrumFull = filterSpectrum(cleanSpectrum);
+    state.filteredSpectrumHalf = magnitudeHalf(state.filteredSpectrumFull);
+    state.reconstructedSignal = idft(state.filteredSpectrumFull);
+    const metrics = computePhoneDemoMetrics(
+      cleanWindowed,
+      state.analysisSignal,
+      state.reconstructedSignal,
+      state.originalSpectrumHalf,
+      state.filteredSpectrumHalf
+    );
+    renderPhoneDemoMetrics(metrics);
+  } else {
+    state.filteredSpectrumFull = filterSpectrum(fullSpectrum);
+    state.filteredSpectrumHalf = magnitudeHalf(state.filteredSpectrumFull);
+    state.reconstructedSignal = idft(state.filteredSpectrumFull);
+    renderPhoneDemoMetrics(null);
+  }
 
   renderPlots();
   renderComponentsList(state.originalSpectrumHalf);
@@ -1348,7 +1474,11 @@ function applyPhoneDemoDefaults() {
   const perBin = hzPerBin();
   const maxBin = halfSpectrumMaxBin(state.sampleCount);
   const targetBin = clamp(Math.round(60 / perBin), 1, maxBin);
-  const cutoffBin = clamp(Math.round(7600 / perBin), 1, maxBin);
+  const cutoffBin = clamp(Math.round(7000 / perBin), 1, maxBin);
+  state.windowType = 'hann';
+  if (els.windowType) {
+    els.windowType.value = state.windowType;
+  }
   state.notchEnabled = true;
   state.lowPassCutoff = cutoffBin;
   state.notchBin = targetBin;
@@ -1452,19 +1582,21 @@ function bindEvents() {
       setStatus('Preparing reconstructed demo...');
       setDemoProcessing(true, 'Processing… 0%');
       const raw = getPhoneDemoPlaybackRaw();
+      const clean = getPhoneDemoPlaybackClean();
       let reconstructed = [];
       try {
-        reconstructed = await getPhoneDemoFilteredPlayback(raw, (done, total) => {
+        reconstructed = await getPhoneDemoFilteredPlayback(clean, (done, total) => {
           const pct = Math.round((done / Math.max(1, total)) * 100);
           setDemoProcessing(true, `Processing… ${pct}%`);
         });
       } finally {
         setDemoProcessing(false);
       }
-      playSignal(reconstructed, 'Playing reconstructed demo', {
+      const leveledReconstructed = matchPerceivedLoudness(reconstructed, raw, 10);
+      playSignal(leveledReconstructed, 'Playing reconstructed demo', {
         tile: false,
         sampleRate: state.sampleRate,
-        referencePeak: peakAbs(raw)
+        gain: 2.5
       });
       return;
     }

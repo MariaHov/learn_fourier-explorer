@@ -399,6 +399,35 @@
   color: #6b7892;
 }
 
+.bespoke .demo-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.bespoke .demo-metric-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid #dde5f4;
+  background: #f8faff;
+}
+
+.bespoke .demo-metric-label {
+  font-size: 11px;
+  color: #617191;
+  font-weight: 600;
+}
+
+.bespoke .demo-metric-value {
+  font-size: 12px;
+  color: #2b3750;
+  font-weight: 700;
+}
+
 .bespoke .audio-controls {
   display: flex;
   flex-wrap: wrap;

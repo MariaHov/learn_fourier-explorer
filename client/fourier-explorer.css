@@ -220,12 +220,6 @@
   justify-content: center;
 }
 
-.bespoke .hum-helper-btn {
-  width: 100%;
-  min-height: 34px;
-  margin-top: 2px;
-}
-
 .bespoke .is-hidden-control {
   display: none;
 }
@@ -528,6 +522,7 @@
   .bespoke .control-row-two {
     grid-template-columns: 1fr;
   }
+
 
   .bespoke .formula-panel {
     grid-template-columns: 1fr;

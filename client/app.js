@@ -14,7 +14,7 @@ const state = {
   harmonics: 9,
   windowType: 'rectangular',
   spectrumScale: 'db',
-  lowPassCutoff: 128,
+  lowPassCutoff: 80,
   notchEnabled: true,
   notchBin: 60,
   notchWidth: 3,
@@ -1936,7 +1936,9 @@ function applyPhoneDemoDefaults() {
   const perBin = hzPerBin();
   const maxBin = halfSpectrumMaxBin(state.sampleCount);
   const targetBin = clamp(Math.round(60 / perBin), 1, maxBin);
-  const cutoffBin = clamp(Math.round(7000 / perBin), 1, maxBin);
+  // "Phone call" voice band is roughly up to ~3.4 kHz; keep the default low-pass there
+  // so the before/after spectrum change is obvious without destroying intelligibility.
+  const cutoffBin = clamp(Math.round(3400 / perBin), 1, maxBin);
   state.windowType = 'hann';
   if (els.windowType) {
     els.windowType.value = state.windowType;

@@ -94,6 +94,7 @@ const els = {
   resetZoomFilteredSpectrum: document.getElementById('btn-reset-zoom-filtered-spectrum'),
   zoomOutFilteredSpectrum: document.getElementById('btn-zoom-out-filtered-spectrum'),
   componentsList: document.getElementById('components-list'),
+  formulaPanel: document.getElementById('formula-panel'),
   formulaBody: document.getElementById('formula-body'),
   demoMetrics: document.getElementById('demo-metrics'),
   help: document.getElementById('btn-help'),
@@ -926,6 +927,15 @@ function computePhoneDemoMetrics(cleanWindowed, noisyWindowed, reconstructed, or
 
 function renderFormulaPanel() {
   if (!els.formulaBody) return;
+  if (els.formulaPanel) {
+    // The formula panel is for teaching the synthetic signals. For the phone-call example,
+    // the more useful focus is the time/spectrum before/after filtering.
+    els.formulaPanel.hidden = state.source === 'phone-call-demo';
+  }
+  if (state.source === 'phone-call-demo') {
+    els.formulaBody.innerHTML = '';
+    return;
+  }
   const f1 = state.freq1;
   const f2 = state.freq2;
   const h = state.harmonics;
@@ -958,14 +968,6 @@ function renderFormulaPanel() {
 
   if (state.source === 'irregular-shape') {
     els.formulaBody.innerHTML = renderFourierSumForCurrentSignal();
-    return;
-  }
-
-  if (state.source === 'phone-call-demo') {
-    els.formulaBody.innerHTML = [
-      '<div class="formula-line">x[n] = real phone-call waveform segment (Cosmo demo)</div>',
-      '<div class="formula-hint">Use low-pass + notch to isolate voice and reduce line hum.</div>'
-    ].join('');
     return;
   }
 

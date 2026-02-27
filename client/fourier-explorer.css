@@ -702,6 +702,10 @@
   border-radius: 12px;
 }
 
+.bespoke .formula-panel[hidden] {
+  display: none;
+}
+
 .bespoke .formula-title {
   font-size: 11px;
   font-weight: 700;

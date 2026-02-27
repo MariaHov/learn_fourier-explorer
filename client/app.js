@@ -75,8 +75,11 @@ const els = {
   originalSpectrumTooltip: document.getElementById('tooltip-original-spectrum'),
   filteredSpectrumTooltip: document.getElementById('tooltip-filtered-spectrum'),
   resetZoomTime: document.getElementById('btn-reset-zoom-time'),
+  zoomOutTime: document.getElementById('btn-zoom-out-time'),
   resetZoomOriginalSpectrum: document.getElementById('btn-reset-zoom-original-spectrum'),
+  zoomOutOriginalSpectrum: document.getElementById('btn-zoom-out-original-spectrum'),
   resetZoomFilteredSpectrum: document.getElementById('btn-reset-zoom-filtered-spectrum'),
+  zoomOutFilteredSpectrum: document.getElementById('btn-zoom-out-filtered-spectrum'),
   componentsList: document.getElementById('components-list'),
   formulaBody: document.getElementById('formula-body'),
   demoMetrics: document.getElementById('demo-metrics'),
@@ -1202,6 +1205,7 @@ function attachPlotInteractions(config) {
     canvas,
     tooltip,
     resetButton,
+    zoomOutButton,
     getDataLength,
     getTooltipHtml,
     requestRender
@@ -1479,6 +1483,30 @@ function attachPlotInteractions(config) {
     });
   }
 
+  if (zoomOutButton) {
+    zoomOutButton.addEventListener('click', () => {
+      const maxIndex = Math.max(0, getDataLength() - 1);
+      if (maxIndex <= 0) return;
+      const domain = getDomain();
+      const span = Math.max(1, domain.end - domain.start);
+      const center = (domain.start + domain.end) / 2;
+      const nextSpan = Math.min(maxIndex, Math.round(span * 2));
+      let nextStart = center - nextSpan / 2;
+      let nextEnd = center + nextSpan / 2;
+      if (nextStart < 0) {
+        nextEnd += -nextStart;
+        nextStart = 0;
+      }
+      if (nextEnd > maxIndex) {
+        const over = nextEnd - maxIndex;
+        nextStart -= over;
+        nextEnd = maxIndex;
+      }
+      interaction.zoomDomain = normalizeDomain({ start: nextStart, end: nextEnd }, maxIndex);
+      requestRender();
+    });
+  }
+
   return {
     resetZoom,
     getRenderOptions() {
@@ -1580,6 +1608,7 @@ function setupPlotInteractionBindings() {
     canvas: els.signalCanvas,
     tooltip: els.timeTooltip,
     resetButton: els.resetZoomTime,
+    zoomOutButton: els.zoomOutTime,
     getDataLength: () => state.analysisSignal.length,
     getTooltipHtml: (index) => {
       const original = state.analysisSignal[index] ?? 0;
@@ -1599,6 +1628,7 @@ function setupPlotInteractionBindings() {
     canvas: els.originalSpectrumCanvas,
     tooltip: els.originalSpectrumTooltip,
     resetButton: els.resetZoomOriginalSpectrum,
+    zoomOutButton: els.zoomOutOriginalSpectrum,
     getDataLength: () => state.originalSpectrumHalf.length,
     getTooltipHtml: (index) => {
       const bin = state.originalSpectrumHalf[index];
@@ -1617,6 +1647,7 @@ function setupPlotInteractionBindings() {
     canvas: els.filteredSpectrumCanvas,
     tooltip: els.filteredSpectrumTooltip,
     resetButton: els.resetZoomFilteredSpectrum,
+    zoomOutButton: els.zoomOutFilteredSpectrum,
     getDataLength: () => state.filteredSpectrumHalf.length,
     getTooltipHtml: (index) => {
       const bin = state.filteredSpectrumHalf[index];

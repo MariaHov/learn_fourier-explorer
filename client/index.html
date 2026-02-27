@@ -158,7 +158,10 @@
             <h2 class="heading-small">Time Domain (Original vs Reconstructed)</h2>
             <p class="plot-subtitle">The waveform over time (sample index). Filtering changes the shape.</p>
           </div>
-          <button id="btn-reset-zoom-time" class="button button-text plot-reset-btn">Reset zoom</button>
+          <div class="plot-actions">
+            <button id="btn-zoom-out-time" class="button button-text plot-reset-btn" type="button">Zoom out</button>
+            <button id="btn-reset-zoom-time" class="button button-text plot-reset-btn" type="button">Reset zoom</button>
+          </div>
         </div>
         <div id="formula-panel" class="formula-panel">
           <div class="formula-title">Formula</div>
@@ -183,7 +186,10 @@
             <h2 class="heading-small">Original Spectrum Magnitude</h2>
             <p class="plot-subtitle">How much of each frequency is present (peaks = strong tones).</p>
           </div>
-          <button id="btn-reset-zoom-original-spectrum" class="button button-text plot-reset-btn">Reset zoom</button>
+          <div class="plot-actions">
+            <button id="btn-zoom-out-original-spectrum" class="button button-text plot-reset-btn" type="button">Zoom out</button>
+            <button id="btn-reset-zoom-original-spectrum" class="button button-text plot-reset-btn" type="button">Reset zoom</button>
+          </div>
         </div>
         <div class="plot-area" id="plot-area-original-spectrum">
           <canvas id="spectrum-noisy-canvas" width="900" height="260"></canvas>
@@ -197,7 +203,10 @@
             <h2 class="heading-small">Filtered Spectrum Magnitude</h2>
             <p class="plot-subtitle">What remains after low-pass and notch filtering.</p>
           </div>
-          <button id="btn-reset-zoom-filtered-spectrum" class="button button-text plot-reset-btn">Reset zoom</button>
+          <div class="plot-actions">
+            <button id="btn-zoom-out-filtered-spectrum" class="button button-text plot-reset-btn" type="button">Zoom out</button>
+            <button id="btn-reset-zoom-filtered-spectrum" class="button button-text plot-reset-btn" type="button">Reset zoom</button>
+          </div>
         </div>
         <div class="plot-area" id="plot-area-filtered-spectrum">
           <canvas id="spectrum-filtered-canvas" width="900" height="260"></canvas>

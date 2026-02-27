@@ -321,6 +321,13 @@
   margin-bottom: 6px;
 }
 
+.bespoke .plot-actions {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
 .bespoke .plot-title-block {
   min-width: 0;
 }

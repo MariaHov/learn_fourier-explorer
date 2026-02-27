@@ -41,20 +41,6 @@ npm run build
 npm run start:prod
 ```
 
-## Assets
-
-Audio (phone-call example):
-- `client/public/audio/Cosmo_clean.wav`
-- `client/public/audio/Cosmo_noisy.wav`
-- `client/public/audio/Cosmo_noisy_light.wav`
-
-Cosmo greeter images:
-- `client/public/cosmo-wave.png`
-- `client/public/Torso_Thumbs_Up.png`
-- `client/public/cosmo_Torso_Star_Eyes.svg`
-- `client/public/Cosmo_Laying_Exhausted.svg`
-- `client/public/i_can_hear_you.png`
-
 ## Notes
 
 - DFT is intentionally implemented directly in JS for learning clarity (not an external DSP library).

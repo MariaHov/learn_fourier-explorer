@@ -4,9 +4,6 @@
   <meta charset="utf-8" />
   <title>CodeSignal Fourier Explorer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="./design-system/colors/colors.css">
   <link rel="stylesheet" href="./design-system/spacing/spacing.css">
@@ -43,12 +40,19 @@
             <div class="control-header">
               <span class="control-caption">Waveform type</span>
             </div>
-            <select id="source" class="input compact-input">
-              <option value="sine">Sine</option>
-              <option value="two-sines">Two sines</option>
-              <option value="square-series">Square (Fourier series)</option>
-              <option value="irregular-shape">Irregular shape</option>
-            </select>
+            <div class="cs-dropdown" data-dropdown="source">
+              <button id="source-trigger" class="cs-dropdown-trigger input compact-input" type="button" aria-haspopup="listbox" aria-expanded="false">
+                <span id="source-trigger-text">Sine</span>
+                <span class="cs-dropdown-caret" aria-hidden="true">▾</span>
+              </button>
+              <div id="source-menu" class="cs-dropdown-menu" role="listbox" aria-label="Source signal" hidden></div>
+              <select id="source" class="input compact-input cs-native-select-hidden" aria-hidden="true" tabindex="-1">
+                <option value="sine">Sine</option>
+                <option value="two-sines">Two sines</option>
+                <option value="square-series">Square (Fourier series)</option>
+                <option value="irregular-shape">Irregular shape</option>
+              </select>
+            </div>
           </label>
         </div>
 
@@ -96,10 +100,17 @@
               <span class="control-caption">How bars are mapped to height</span>
               <span class="tag tag-muted">Visualization</span>
             </div>
-            <select id="spectrum-scale" class="input compact-input">
-              <option value="linear">Linear</option>
-              <option value="db" selected>dB (log)</option>
-            </select>
+            <div class="cs-dropdown" data-dropdown="spectrum-scale">
+              <button id="spectrum-scale-trigger" class="cs-dropdown-trigger input compact-input" type="button" aria-haspopup="listbox" aria-expanded="false">
+                <span id="spectrum-scale-trigger-text">dB (log)</span>
+                <span class="cs-dropdown-caret" aria-hidden="true">▾</span>
+              </button>
+              <div id="spectrum-scale-menu" class="cs-dropdown-menu" role="listbox" aria-label="Spectrum scale" hidden></div>
+              <select id="spectrum-scale" class="input compact-input cs-native-select-hidden" aria-hidden="true" tabindex="-1">
+                <option value="linear">Linear</option>
+                <option value="db" selected>dB (log)</option>
+              </select>
+            </div>
           </label>
         </div>
 
@@ -124,10 +135,17 @@
                 <span class="control-caption">Shape before DFT</span>
                 <span class="tag">DFT input</span>
               </div>
-              <select id="window-type" class="input compact-input">
-                <option value="rectangular">Rectangular</option>
-                <option value="hann">Hann</option>
-              </select>
+              <div class="cs-dropdown" data-dropdown="window-type">
+                <button id="window-type-trigger" class="cs-dropdown-trigger input compact-input" type="button" aria-haspopup="listbox" aria-expanded="false">
+                  <span id="window-type-trigger-text">Rectangular</span>
+                  <span class="cs-dropdown-caret" aria-hidden="true">▾</span>
+                </button>
+                <div id="window-type-menu" class="cs-dropdown-menu" role="listbox" aria-label="Window type" hidden></div>
+                <select id="window-type" class="input compact-input cs-native-select-hidden" aria-hidden="true" tabindex="-1">
+                  <option value="rectangular">Rectangular</option>
+                  <option value="hann">Hann</option>
+                </select>
+              </div>
             </label>
 
             <label class="row inline-check">
@@ -247,13 +265,47 @@
 
   <dialog id="help-dialog" class="help-dialog">
     <article>
-      <h2>How to use</h2>
-      <ol>
-        <li>Pick a synthetic source and tune frequencies.</li>
-        <li>Change harmonics and window type to inspect spectral leakage.</li>
-        <li>Use low-pass and notch filters to modify complex frequency bins.</li>
-        <li>Compare the original and reconstructed waveforms and spectra.</li>
-      </ol>
+      <h2>How to Use Fourier Explorer</h2>
+
+      <h3>What You’re Seeing</h3>
+      <ul>
+        <li><strong>Time Domain</strong>: the waveform over time (original vs reconstructed).</li>
+        <li><strong>Spectrum (Magnitude)</strong>: “how much” of each frequency is present (peaks = strong frequencies).</li>
+        <li><strong>Filtered Spectrum</strong>: what remains after applying filters in frequency space.</li>
+      </ul>
+
+      <h3>Core Controls</h3>
+      <ul>
+        <li><strong>Source</strong>: choose a signal to analyze.</li>
+        <li><strong>Samples (N)</strong>: DFT resolution (larger N = finer frequency bins).</li>
+        <li><strong>Window type</strong>: reduces spectral leakage (Hann is usually smoother than Rectangular).</li>
+        <li><strong>Low-pass cutoff</strong>: keeps frequencies below the cutoff bin; removes higher frequencies.</li>
+        <li><strong>Notch</strong>: removes a narrow band around the notch center bin (good for hum).</li>
+        <li><strong>Spectrum scale</strong>: use dB to make quieter components visible.</li>
+      </ul>
+
+      <h3>Audio Buttons</h3>
+      <ul>
+        <li><strong>Play Original</strong>: plays the current signal.</li>
+        <li><strong>Play Reconstructed</strong>: plays the signal after filtering + inverse transform.</li>
+        <li><strong>Play Removed Noise</strong>: plays what was removed (original − reconstructed).</li>
+      </ul>
+
+      <h3>Plot Interactions</h3>
+      <ul>
+        <li><strong>Hover</strong>: see values at the nearest point/bin.</li>
+        <li><strong>Click</strong>: zoom in around that point.</li>
+        <li><strong>Drag</strong>: zoom into a selected range.</li>
+        <li><strong>Zoom out</strong>: step back one level.</li>
+        <li><strong>Reset zoom</strong>: return to full view.</li>
+        <li><strong>Pan (zoomed)</strong>: hold <strong>Shift</strong> or <strong>Alt</strong> and drag; mouse wheel pans too.</li>
+      </ul>
+
+      <h3>One-Click Example</h3>
+      <ul>
+        <li>Use <strong>Example usage → Phone Call: Noise Removal</strong> to load the built-in demo.</li>
+      </ul>
+
       <button id="btn-close-help" class="button button-primary">Close</button>
     </article>
   </dialog>

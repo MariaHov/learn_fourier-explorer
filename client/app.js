@@ -37,6 +37,12 @@ const state = {
 const els = {
   status: document.getElementById('status'),
   source: document.getElementById('source'),
+  sourceTrigger: document.getElementById('source-trigger'),
+  sourceTriggerText: document.getElementById('source-trigger-text'),
+  sourceMenu: document.getElementById('source-menu'),
+  spectrumScaleTrigger: document.getElementById('spectrum-scale-trigger'),
+  spectrumScaleTriggerText: document.getElementById('spectrum-scale-trigger-text'),
+  spectrumScaleMenu: document.getElementById('spectrum-scale-menu'),
   controlF1Field: document.getElementById('control-f1-field'),
   controlF2Field: document.getElementById('control-f2-field'),
   controlHarmonicsField: document.getElementById('control-harmonics-field'),
@@ -52,6 +58,9 @@ const els = {
   harmonics: document.getElementById('harmonics'),
   harmonicsValue: document.getElementById('harmonics-value'),
   windowType: document.getElementById('window-type'),
+  windowTypeTrigger: document.getElementById('window-type-trigger'),
+  windowTypeTriggerText: document.getElementById('window-type-trigger-text'),
+  windowTypeMenu: document.getElementById('window-type-menu'),
   spectrumScale: document.getElementById('spectrum-scale'),
   notchControlsRow: document.getElementById('notch-controls-row'),
   lowPass: document.getElementById('low-pass'),
@@ -231,6 +240,165 @@ function updateSourceControlVisibility() {
   }
 }
 
+let sourceDropdownOpen = false;
+
+function closeSourceDropdown() {
+  if (!els.sourceMenu || !els.sourceTrigger) return;
+  sourceDropdownOpen = false;
+  els.sourceMenu.hidden = true;
+  els.sourceTrigger.setAttribute('aria-expanded', 'false');
+}
+
+function openSourceDropdown() {
+  if (!els.sourceMenu || !els.sourceTrigger) return;
+  sourceDropdownOpen = true;
+  els.sourceMenu.hidden = false;
+  els.sourceTrigger.setAttribute('aria-expanded', 'true');
+}
+
+function syncSourceTriggerLabel() {
+  if (!els.source || !els.sourceTriggerText) return;
+  const selected = els.source.options[els.source.selectedIndex];
+  els.sourceTriggerText.textContent = selected ? selected.textContent : 'Select';
+}
+
+function rebuildSourceMenu() {
+  if (!els.source || !els.sourceMenu) return;
+  const currentValue = els.source.value;
+  const options = Array.from(els.source.options);
+  els.sourceMenu.innerHTML = options.map((opt) => {
+    const selected = opt.value === currentValue;
+    const check = selected ? '<span class="cs-dropdown-check" aria-hidden="true">✓</span>' : '';
+    return `<button class="cs-dropdown-option" type="button" role="option" data-value="${opt.value}" aria-selected="${selected ? 'true' : 'false'}">${opt.textContent}${check}</button>`;
+  }).join('');
+  syncSourceTriggerLabel();
+}
+
+function setupSourceDropdown() {
+  if (!els.sourceTrigger || !els.sourceMenu || !els.source) return;
+
+  rebuildSourceMenu();
+  closeSourceDropdown();
+
+  els.sourceTrigger.addEventListener('click', () => {
+    rebuildSourceMenu();
+    if (sourceDropdownOpen) closeSourceDropdown();
+    else openSourceDropdown();
+  });
+
+  els.sourceMenu.addEventListener('click', (event) => {
+    const button = event.target && event.target.closest
+      ? event.target.closest('.cs-dropdown-option')
+      : null;
+    if (!button) return;
+    const value = button.getAttribute('data-value');
+    if (!value) return;
+    if (els.source.value !== value) {
+      els.source.value = value;
+      // Preserve existing wiring.
+      els.source.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    closeSourceDropdown();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!sourceDropdownOpen) return;
+    const root = els.sourceTrigger.closest('[data-dropdown="source"]');
+    if (root && root.contains(event.target)) return;
+    closeSourceDropdown();
+  });
+
+  window.addEventListener('keydown', (event) => {
+    if (!sourceDropdownOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeSourceDropdown();
+    }
+  });
+
+  // Keep label in sync if code changes `#source` value programmatically.
+  els.source.addEventListener('change', () => {
+    syncSourceTriggerLabel();
+    closeSourceDropdown();
+  });
+}
+
+function setupSimpleSelectDropdown(selectEl, triggerEl, triggerTextEl, menuEl, dropdownAttrValue) {
+  if (!selectEl || !triggerEl || !triggerTextEl || !menuEl) return;
+  let isOpen = false;
+
+  const close = () => {
+    isOpen = false;
+    menuEl.hidden = true;
+    triggerEl.setAttribute('aria-expanded', 'false');
+  };
+
+  const open = () => {
+    isOpen = true;
+    menuEl.hidden = false;
+    triggerEl.setAttribute('aria-expanded', 'true');
+  };
+
+  const syncLabel = () => {
+    const selected = selectEl.options[selectEl.selectedIndex];
+    triggerTextEl.textContent = selected ? selected.textContent : 'Select';
+  };
+
+  const rebuildMenu = () => {
+    const currentValue = selectEl.value;
+    const options = Array.from(selectEl.options);
+    menuEl.innerHTML = options.map((opt) => {
+      const selected = opt.value === currentValue;
+      const check = selected ? '<span class="cs-dropdown-check" aria-hidden="true">✓</span>' : '';
+      return `<button class="cs-dropdown-option" type="button" role="option" data-value="${opt.value}" aria-selected="${selected ? 'true' : 'false'}">${opt.textContent}${check}</button>`;
+    }).join('');
+    syncLabel();
+  };
+
+  rebuildMenu();
+  close();
+
+  triggerEl.addEventListener('click', () => {
+    rebuildMenu();
+    if (isOpen) close();
+    else open();
+  });
+
+  menuEl.addEventListener('click', (event) => {
+    const button = event.target && event.target.closest
+      ? event.target.closest('.cs-dropdown-option')
+      : null;
+    if (!button) return;
+    const value = button.getAttribute('data-value');
+    if (!value) return;
+    if (selectEl.value !== value) {
+      selectEl.value = value;
+      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    close();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!isOpen) return;
+    const root = triggerEl.closest(`[data-dropdown="${dropdownAttrValue}"]`);
+    if (root && root.contains(event.target)) return;
+    close();
+  });
+
+  window.addEventListener('keydown', (event) => {
+    if (!isOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    }
+  });
+
+  selectEl.addEventListener('change', () => {
+    syncLabel();
+    close();
+  });
+}
+
 function ensurePhoneDemoOption() {
   if (!els.source) return;
   const value = 'phone-call-demo';
@@ -246,6 +414,7 @@ function ensurePhoneDemoOption() {
   } else if (existing) {
     existing.remove();
   }
+  rebuildSourceMenu();
 }
 
 function extractMonoFull(audioBuffer) {
@@ -2012,6 +2181,21 @@ function init() {
   setupPlotInteractionBindings();
   bindSidebarUi();
   initializeDefaults();
+  setupSourceDropdown();
+  setupSimpleSelectDropdown(
+    els.windowType,
+    els.windowTypeTrigger,
+    els.windowTypeTriggerText,
+    els.windowTypeMenu,
+    'window-type'
+  );
+  setupSimpleSelectDropdown(
+    els.spectrumScale,
+    els.spectrumScaleTrigger,
+    els.spectrumScaleTriggerText,
+    els.spectrumScaleMenu,
+    'spectrum-scale'
+  );
   bindEvents();
   analyze();
   scheduleCosmoGreeting();

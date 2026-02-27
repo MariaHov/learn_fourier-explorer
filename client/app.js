@@ -63,6 +63,7 @@ const els = {
   notchWidthValue: document.getElementById('notch-width-value'),
   notchWidthHz: document.getElementById('notch-width-hz'),
   resetFilters: document.getElementById('btn-reset-filters'),
+  resetAll: document.getElementById('btn-reset-all'),
   playOriginal: document.getElementById('btn-play-original'),
   playReconstructed: document.getElementById('btn-play-reconstructed'),
   playDifference: document.getElementById('btn-play-difference'),
@@ -134,6 +135,7 @@ const cosmoScenes = [
 function scheduleCosmoGreeting() {
   if (!cosmoEnabled || !cosmoEls.root) return;
   if (cosmoTimer) clearTimeout(cosmoTimer);
+  if (cosmoSceneIndex >= cosmoScenes.length) return;
 
   // First greeting should be quick; afterwards keep it periodic.
   let delay;
@@ -1257,6 +1259,15 @@ function attachPlotInteractions(config) {
     if (tooltip) tooltip.hidden = true;
   };
 
+  const resetZoom = () => {
+    interaction.zoomDomain = null;
+    interaction.hoverPx = null;
+    interaction.isPanning = false;
+    plotArea.classList.remove('is-panning');
+    hideTooltip();
+    requestRender();
+  };
+
   const toCanvasX = (event) => {
     const rect = plotArea.getBoundingClientRect();
     return clamp(event.clientX - rect.left, 0, rect.width);
@@ -1464,16 +1475,12 @@ function attachPlotInteractions(config) {
 
   if (resetButton) {
     resetButton.addEventListener('click', () => {
-      interaction.zoomDomain = null;
-      interaction.hoverPx = null;
-      interaction.isPanning = false;
-      plotArea.classList.remove('is-panning');
-      hideTooltip();
-      requestRender();
+      resetZoom();
     });
   }
 
   return {
+    resetZoom,
     getRenderOptions() {
       return {
         domain: getDomain(),
@@ -1635,6 +1642,46 @@ function resetFilters() {
   analyze();
 }
 
+function resetAll() {
+  stopPlayback();
+  hideCosmoGreeting();
+
+  state.source = 'sine';
+  state.sampleRate = DEFAULT_SAMPLE_RATE;
+  state.sampleCount = 1024;
+  state.freq1 = 120;
+  state.freq2 = 260;
+  state.harmonics = 9;
+  state.windowType = 'rectangular';
+  state.notchEnabled = false;
+  state.notchWidth = 3;
+  state.lowPassCutoff = halfSpectrumMaxBin(state.sampleCount);
+  state.notchBin = Math.min(60, state.lowPassCutoff);
+
+  els.source.value = state.source;
+  els.samples.value = String(state.sampleCount);
+  els.freq1.value = String(state.freq1);
+  els.freq2.value = String(state.freq2);
+  els.harmonics.value = String(state.harmonics);
+  els.windowType.value = state.windowType;
+  els.notchEnabled.checked = state.notchEnabled;
+
+  setEditableValueText(els.samplesValue, state.sampleCount, els.samples);
+  setEditableValueText(els.freq1Value, state.freq1, els.freq1);
+  setEditableValueText(els.freq2Value, state.freq2, els.freq2);
+  setEditableValueText(els.harmonicsValue, state.harmonics, els.harmonics);
+
+  setAdvancedOpen(false);
+  updateSourceControlVisibility();
+  updateFilterBounds();
+
+  plotInteractions.time?.resetZoom?.();
+  plotInteractions.originalSpectrum?.resetZoom?.();
+  plotInteractions.filteredSpectrum?.resetZoom?.();
+
+  analyze();
+}
+
 function applyPhoneDemoDefaults() {
   const perBin = hzPerBin();
   const maxBin = halfSpectrumMaxBin(state.sampleCount);
@@ -1721,6 +1768,7 @@ function bindEvents() {
   });
 
   els.resetFilters.addEventListener('click', resetFilters);
+  if (els.resetAll) els.resetAll.addEventListener('click', resetAll);
   els.playOriginal.addEventListener('click', async () => {
     if (state.source === 'phone-call-demo') {
       const ready = await ensurePhoneDemoLoaded();

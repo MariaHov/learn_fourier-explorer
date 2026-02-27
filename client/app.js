@@ -13,6 +13,7 @@ const state = {
   freq2: 260,
   harmonics: 9,
   windowType: 'rectangular',
+  spectrumScale: 'db',
   lowPassCutoff: 128,
   notchEnabled: true,
   notchBin: 60,
@@ -51,6 +52,7 @@ const els = {
   harmonics: document.getElementById('harmonics'),
   harmonicsValue: document.getElementById('harmonics-value'),
   windowType: document.getElementById('window-type'),
+  spectrumScale: document.getElementById('spectrum-scale'),
   notchControlsRow: document.getElementById('notch-controls-row'),
   lowPass: document.getElementById('low-pass'),
   lowPassValue: document.getElementById('low-pass-value'),
@@ -64,6 +66,7 @@ const els = {
   notchWidthHz: document.getElementById('notch-width-hz'),
   resetFilters: document.getElementById('btn-reset-filters'),
   resetAll: document.getElementById('btn-reset-all'),
+  examplePhoneDemo: document.getElementById('btn-example-phone-demo'),
   playOriginal: document.getElementById('btn-play-original'),
   playReconstructed: document.getElementById('btn-play-reconstructed'),
   playDifference: document.getElementById('btn-play-difference'),
@@ -225,6 +228,23 @@ function updateSourceControlVisibility() {
   // Reduce clutter: hide notch bin/width sliders unless notch is enabled.
   if (els.notchControlsRow) {
     els.notchControlsRow.classList.toggle('is-hidden-control', !state.notchEnabled);
+  }
+}
+
+function ensurePhoneDemoOption() {
+  if (!els.source) return;
+  const value = 'phone-call-demo';
+  const existing = Array.from(els.source.options).find((opt) => opt.value === value);
+  if (state.source === value) {
+    if (!existing) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = 'Example: Phone Call (Cosmo)';
+      els.source.appendChild(opt);
+    }
+    els.source.value = value;
+  } else if (existing) {
+    existing.remove();
   }
 }
 
@@ -1183,11 +1203,21 @@ function drawSpectrum(canvas, bins, color, options = {}) {
   const end = Math.ceil(domain.end);
   const visible = bins.slice(start, end + 1);
   if (!visible.length) return;
+  const MIN_DB = -80;
+  const MAX_DB = 0;
+  const toDb = (magnitude) => 20 * Math.log10((magnitude || 0) + 1e-12);
   const maxMagnitude = Math.max(...visible.map((bin) => bin.magnitude), 1e-9);
   const barWidth = width / visible.length;
   ctx.fillStyle = color;
   for (let i = 0; i < visible.length; i += 1) {
-    const barHeight = (visible[i].magnitude / maxMagnitude) * (height * 0.9);
+    let barHeight;
+    if (state.spectrumScale === 'db') {
+      const db = clamp(toDb(visible[i].magnitude), MIN_DB, MAX_DB);
+      const ratio = (db - MIN_DB) / Math.max(1e-9, (MAX_DB - MIN_DB));
+      barHeight = ratio * (height * 0.9);
+    } else {
+      barHeight = (visible[i].magnitude / maxMagnitude) * (height * 0.9);
+    }
     const x = i * barWidth + 1;
     const y = height - barHeight;
     ctx.fillRect(x, y, Math.max(1, barWidth - 2), barHeight);
@@ -1735,6 +1765,7 @@ function bindEvents() {
     const previousSource = state.source;
     state.source = event.target.value;
     updateSourceControlVisibility();
+    ensurePhoneDemoOption();
     if (state.source === 'phone-call-demo' && previousSource !== 'phone-call-demo') {
       applyPhoneDemoDefaults();
     }
@@ -1771,6 +1802,13 @@ function bindEvents() {
     analyze();
   });
 
+  if (els.spectrumScale) {
+    els.spectrumScale.addEventListener('change', (event) => {
+      state.spectrumScale = event.target.value;
+      renderPlots();
+    });
+  }
+
   els.lowPass.addEventListener('input', (event) => {
     state.lowPassCutoff = Number(event.target.value);
     setEditableValueText(els.lowPassValue, state.lowPassCutoff, els.lowPass);
@@ -1800,6 +1838,16 @@ function bindEvents() {
 
   els.resetFilters.addEventListener('click', resetFilters);
   if (els.resetAll) els.resetAll.addEventListener('click', resetAll);
+  if (els.examplePhoneDemo) {
+    els.examplePhoneDemo.addEventListener('click', () => {
+      const previousSource = state.source;
+      state.source = 'phone-call-demo';
+      ensurePhoneDemoOption();
+      updateSourceControlVisibility();
+      if (previousSource !== 'phone-call-demo') applyPhoneDemoDefaults();
+      analyze();
+    });
+  }
   els.playOriginal.addEventListener('click', async () => {
     if (state.source === 'phone-call-demo') {
       const ready = await ensurePhoneDemoLoaded();
@@ -1904,6 +1952,7 @@ function bindEvents() {
 function initializeDefaults() {
   els.source.value = state.source;
   updateSourceControlVisibility();
+  ensurePhoneDemoOption();
   setAdvancedOpen(false);
   els.freq1.value = String(state.freq1);
   setEditableValueText(els.freq1Value, state.freq1, els.freq1);
@@ -1914,6 +1963,7 @@ function initializeDefaults() {
   els.samples.value = String(state.sampleCount);
   setEditableValueText(els.samplesValue, state.sampleCount, els.samples);
   els.windowType.value = state.windowType;
+  if (els.spectrumScale) els.spectrumScale.value = state.spectrumScale;
   els.notchEnabled.checked = state.notchEnabled;
   updateFilterBounds();
   setupEditableNumberValue(els.freq1Value, els.freq1);

@@ -90,6 +90,17 @@
             </div>
             <input id="low-pass" class="input" type="range" min="1" max="1023" step="1" value="128" />
           </label>
+
+          <label class="control-field">Spectrum scale
+            <div class="control-header">
+              <span class="control-caption">How bars are mapped to height</span>
+              <span class="tag tag-muted">Visualization</span>
+            </div>
+            <select id="spectrum-scale" class="input compact-input">
+              <option value="linear">Linear</option>
+              <option value="db" selected>dB (log)</option>
+            </select>
+          </label>
         </div>
 
         <div id="advanced-accordion" class="control-group advanced-accordion">

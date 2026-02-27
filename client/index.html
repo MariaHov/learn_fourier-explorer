@@ -35,9 +35,9 @@
         <h2 class="heading-small">Fourier Decomposition Explorer</h2>
         <p class="controls-intro">Tune the signal and watch Fourier components update live.</p>
 
-        <div class="control-group">
-          <h3 class="control-group-title">Basic controls</h3>
-          <p class="control-group-help">Core settings for quick exploration.</p>
+        <div class="control-group control-group--source">
+          <h3 class="control-group-title">Source</h3>
+          <p class="control-group-help">Choose what signal you are analyzing.</p>
 
           <label class="control-field">Source signal
             <div class="control-header">
@@ -48,9 +48,13 @@
               <option value="two-sines">Two sines</option>
               <option value="square-series">Square (Fourier series)</option>
               <option value="irregular-shape">Irregular shape</option>
-              <option value="phone-call-demo">Phone Call Demo (Cosmo)</option>
             </select>
           </label>
+        </div>
+
+        <div class="control-group">
+          <h3 class="control-group-title">Basic controls</h3>
+          <p class="control-group-help">Core settings for quick exploration.</p>
 
           <label id="control-f1-field" class="control-field">Frequency f1 (Hz)
             <div class="control-header">
@@ -142,6 +146,14 @@
               </label>
             </div>
           </div>
+        </div>
+
+        <div class="control-group">
+          <h3 class="control-group-title">Example usage</h3>
+          <p class="control-group-help">One-click demo setups.</p>
+          <button id="btn-example-phone-demo" class="button button-secondary" type="button">
+            Phone Call: Noise Removal
+          </button>
         </div>
 
         <div class="row controls-actions">

@@ -93,6 +93,15 @@
   border-radius: 12px;
 }
 
+.bespoke .control-group--source {
+  border-color: #d7e4fb;
+  background: linear-gradient(180deg, #f4f8ff 0%, #fbfcff 100%);
+}
+
+.bespoke .control-group--source .control-group-title {
+  letter-spacing: 0.01em;
+}
+
 .bespoke .control-group-help {
   margin: 0 0 6px 0;
   font-size: 11px;

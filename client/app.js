@@ -4,6 +4,7 @@ const DEFAULT_GAIN = 0.12;
 const MAX_PLAY_GAIN = 2.5;
 const DEFAULT_FADE_SECONDS = 0.015;
 const PHONE_DEMO_CLEAN_URL = '/audio/Cosmo_clean.wav';
+const DEFAULT_LOW_PASS_BIN = 80;
 
 const state = {
   sampleRate: DEFAULT_SAMPLE_RATE,
@@ -14,7 +15,7 @@ const state = {
   harmonics: 9,
   windowType: 'rectangular',
   spectrumScale: 'db',
-  lowPassCutoff: 80,
+  lowPassCutoff: DEFAULT_LOW_PASS_BIN,
   notchEnabled: true,
   notchBin: 60,
   notchWidth: 3,
@@ -1903,9 +1904,10 @@ function resetAll() {
   state.freq2 = 260;
   state.harmonics = 9;
   state.windowType = 'rectangular';
+  state.spectrumScale = 'db';
   state.notchEnabled = false;
   state.notchWidth = 3;
-  state.lowPassCutoff = halfSpectrumMaxBin(state.sampleCount);
+  state.lowPassCutoff = DEFAULT_LOW_PASS_BIN;
   state.notchBin = Math.min(60, state.lowPassCutoff);
 
   els.source.value = state.source;
@@ -1914,6 +1916,7 @@ function resetAll() {
   els.freq2.value = String(state.freq2);
   els.harmonics.value = String(state.harmonics);
   els.windowType.value = state.windowType;
+  if (els.spectrumScale) els.spectrumScale.value = state.spectrumScale;
   els.notchEnabled.checked = state.notchEnabled;
 
   setEditableValueText(els.samplesValue, state.sampleCount, els.samples);
@@ -1922,8 +1925,19 @@ function resetAll() {
   setEditableValueText(els.harmonicsValue, state.harmonics, els.harmonics);
 
   setAdvancedOpen(false);
+  ensurePhoneDemoOption();
   updateSourceControlVisibility();
   updateFilterBounds();
+
+  // Keep custom dropdown trigger labels consistent (no need to rebuild menus until opened).
+  if (els.windowTypeTriggerText) {
+    const opt = els.windowType.options[els.windowType.selectedIndex];
+    els.windowTypeTriggerText.textContent = opt ? opt.textContent : 'Select';
+  }
+  if (els.spectrumScaleTriggerText && els.spectrumScale) {
+    const opt = els.spectrumScale.options[els.spectrumScale.selectedIndex];
+    els.spectrumScaleTriggerText.textContent = opt ? opt.textContent : 'Select';
+  }
 
   plotInteractions.time?.resetZoom?.();
   plotInteractions.originalSpectrum?.resetZoom?.();

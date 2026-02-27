@@ -1998,6 +1998,17 @@ function initializeDefaults() {
 }
 
 function init() {
+  // If the design-system submodule/CSS didn't load, apply a small fallback skin.
+  // We detect this by checking for a token defined by the design system.
+  try {
+    const token = getComputedStyle(document.documentElement)
+      .getPropertyValue('--Colors-Text-Body-Default')
+      .trim();
+    if (!token) document.body.classList.add('no-design-system');
+  } catch (_) {
+    document.body.classList.add('no-design-system');
+  }
+
   setupPlotInteractionBindings();
   bindSidebarUi();
   initializeDefaults();

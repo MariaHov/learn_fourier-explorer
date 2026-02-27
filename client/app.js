@@ -1226,6 +1226,8 @@ function drawSpectrum(canvas, bins, color, options = {}) {
   const toDb = (magnitude) => 20 * Math.log10((magnitude || 0) + 1e-12);
   const maxMagnitude = Math.max(...visible.map((bin) => bin.magnitude), 1e-9);
   const barWidth = width / visible.length;
+  const highlightNotch = state.notchEnabled && state.notchBin >= start && state.notchBin <= end;
+  const notchColor = '#d0342c';
   ctx.fillStyle = color;
   for (let i = 0; i < visible.length; i += 1) {
     let barHeight;
@@ -1238,7 +1240,10 @@ function drawSpectrum(canvas, bins, color, options = {}) {
     }
     const x = i * barWidth + 1;
     const y = height - barHeight;
+    const isNotchBin = highlightNotch && (start + i) === state.notchBin;
+    if (isNotchBin) ctx.fillStyle = notchColor;
     ctx.fillRect(x, y, Math.max(1, barWidth - 2), barHeight);
+    if (isNotchBin) ctx.fillStyle = color;
   }
   drawSelectionOverlay(ctx, width, height, options.hoverSelection, {
     fill: 'rgba(16, 167, 127, 0.10)',

@@ -1129,6 +1129,26 @@ function clearCanvas(ctx, width, height, axis = 'x') {
   ctx.stroke();
 }
 
+function getCanvasContext(canvas) {
+  const ctx = canvas.getContext('2d');
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const displayWidth = Math.max(1, Math.round(rect.width * dpr));
+  const displayHeight = Math.max(1, Math.round(rect.height * dpr));
+  if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+    canvas.width = displayWidth;
+    canvas.height = displayHeight;
+  }
+  // Draw in CSS pixels, map to device pixels via transform.
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return {
+    ctx,
+    width: Math.max(1, rect.width),
+    height: Math.max(1, rect.height),
+    dpr
+  };
+}
+
 function drawSelectionOverlay(ctx, width, height, selection, style = {}) {
   if (!selection) return;
   const left = clamp(Math.min(selection.x0, selection.x1), 0, width);
@@ -1155,8 +1175,7 @@ function normalizeDomain(domain, maxIndex) {
 }
 
 function drawSignalOverlay(canvas, original, reconstructed, options = {}) {
-  const ctx = canvas.getContext('2d');
-  const { width, height } = canvas;
+  const { ctx, width, height } = getCanvasContext(canvas);
   clearCanvas(ctx, width, height, 'x');
   if (!original.length) return;
   const domain = normalizeDomain(options.domain, original.length - 1);
@@ -1193,8 +1212,7 @@ function drawSignalOverlay(canvas, original, reconstructed, options = {}) {
 }
 
 function drawSpectrum(canvas, bins, color, options = {}) {
-  const ctx = canvas.getContext('2d');
-  const { width, height } = canvas;
+  const { ctx, width, height } = getCanvasContext(canvas);
   clearCanvas(ctx, width, height, 'y');
   if (!bins.length) return;
 
@@ -1262,11 +1280,9 @@ function attachPlotInteractions(config) {
 
   const getSelection = () => {
     if (!interaction.isDragging) return null;
-    const clientWidth = Math.max(1, canvas.clientWidth || canvas.width);
-    const scaleX = canvas.width / clientWidth;
     return {
-      x0: interaction.dragStartPx * scaleX,
-      x1: interaction.dragCurrentPx * scaleX
+      x0: interaction.dragStartPx,
+      x1: interaction.dragCurrentPx
     };
   };
 
@@ -1277,15 +1293,14 @@ function attachPlotInteractions(config) {
     const domain = getDomain();
     const span = Math.max(1, domain.end - domain.start);
     const previewSpan = Math.max(8, Math.round(span * 0.24));
-    const width = Math.max(1, canvas.clientWidth || canvas.width);
+    const width = Math.max(1, canvas.clientWidth);
     const centerRatio = clamp(interaction.hoverPx / width, 0, 1);
     const center = domain.start + centerRatio * span;
     const start = center - previewSpan / 2;
     const end = center + previewSpan / 2;
     const clamped = normalizeDomain({ start, end }, Math.max(0, dataLength - 1));
-    const scaleX = canvas.width / width;
-    const x0 = ((clamped.start - domain.start) / Math.max(1e-9, span)) * width * scaleX;
-    const x1 = ((clamped.end - domain.start) / Math.max(1e-9, span)) * width * scaleX;
+    const x0 = ((clamped.start - domain.start) / Math.max(1e-9, span)) * width;
+    const x1 = ((clamped.end - domain.start) / Math.max(1e-9, span)) * width;
     return { x0, x1 };
   };
 
